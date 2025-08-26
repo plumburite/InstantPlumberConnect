@@ -1,0 +1,58 @@
+import { Button } from "@/components/ui/button";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { Wrench, LogOut } from "lucide-react";
+
+export default function NavigationHeader() {
+  const [location] = useLocation();
+  const { user, logoutMutation } = useAuth();
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
+
+  return (
+    <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <Link href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+            <Wrench className="text-primary text-2xl" />
+            <span className="text-xl font-bold text-primary">PlumberConnect</span>
+          </Link>
+          
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <>
+                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Dashboard
+                </Link>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  disabled={logoutMutation.isPending}
+                  data-testid="button-logout"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/auth" className="text-muted-foreground hover:text-foreground transition-colors">
+                  For Plumbers
+                </Link>
+                <Button 
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  data-testid="button-emergency"
+                >
+                  Emergency Help
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
