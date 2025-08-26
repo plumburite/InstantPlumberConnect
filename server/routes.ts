@@ -3,10 +3,22 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertCallSchema } from "@shared/schema";
+import { SocketServer } from "./socket-server";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+
+  // Create HTTP server first
+  const httpServer = createServer(app);
+  
+  // Initialize Socket.IO server
+  const socketServer = new SocketServer(httpServer);
+  
+  // Initialize FCM service
+  import('./fcm-service').then(({ fcmService }) => {
+    console.log('FCM Service initialized');
+  });
 
   // Plumber availability toggle
   app.patch("/api/plumber/availability", async (req, res) => {
@@ -104,6 +116,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
+  // FCM Token registration endpoint
+  app.post("/api/plumber/fcm-token", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    try {
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ message: "FCM token is required" });
+      }
+
+      // Update plumber's FCM token in database
+      if (storage.updatePlumberFCMToken) {
+        await storage.updatePlumberFCMToken(req.user!.id, token);
+      }
+
+      res.json({ message: "FCM token registered successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to register FCM token" });
+    }
+  });
+
   return httpServer;
 }

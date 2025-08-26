@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, Video, Shield, Clock, Star, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useSocket } from "@/hooks/use-socket";
 
 interface HeroSectionProps {
   onVideoChat: () => void;
@@ -15,27 +14,20 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const { toast } = useToast();
+  const { initiateCall, isConnected, activeCalls } = useSocket();
 
-  const createCallMutation = useMutation({
-    mutationFn: async (data: {customerName: string, customerLocation: string, issueDescription: string}) => {
-      const res = await apiRequest("POST", "/api/calls", data);
-      return await res.json();
-    },
-    onSuccess: () => {
-      setTimeout(() => {
+  // Listen for call status changes
+  useEffect(() => {
+    if (activeCalls.size > 0) {
+      const callEntries = Array.from(activeCalls.values());
+      const activeCall = callEntries.find(call => call.status === 'accepted');
+      
+      if (activeCall && isConnecting) {
         setIsConnecting(false);
         onVideoChat();
-      }, 3000);
-    },
-    onError: (error: Error) => {
-      setIsConnecting(false);
-      toast({
-        title: "Connection failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+      }
+    }
+  }, [activeCalls, isConnecting, onVideoChat]);
 
   const requestLocation = () => {
     if (navigator.geolocation) {
@@ -69,13 +61,30 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
   };
 
   const startConnection = () => {
+    if (!userLocation) {
+      toast({
+        title: "Location required",
+        description: "Please share your location to find nearby plumbers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isConnected) {
+      toast({
+        title: "Connection error",
+        description: "Unable to connect to the service. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsConnecting(true);
-    const locationStr = userLocation ? `${userLocation.lat}, ${userLocation.lng}` : "Location not available";
     
-    createCallMutation.mutate({
+    initiateCall({
       customerName: "Guest Customer",
-      customerLocation: locationStr,
       issueDescription: "Emergency plumbing assistance needed",
+      location: userLocation,
     });
   };
 

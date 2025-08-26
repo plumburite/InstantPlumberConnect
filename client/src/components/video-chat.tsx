@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Video, VideoOff, Phone, Send, Star } from "lucide-react";
+import { useSocket } from "@/hooks/use-socket";
+import { useWebRTC } from "@/hooks/use-webrtc";
 
 interface VideoChatProps {
   onEndCall: () => void;
 }
 
 export default function VideoChat({ onEndCall }: VideoChatProps) {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOn, setIsVideoOn] = useState(true);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([
     {
@@ -29,6 +29,24 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
       isPlumber: false,
     },
   ]);
+
+  const { activeCalls, endCall } = useSocket();
+  const activeCallArray = Array.from(activeCalls.values());
+  const currentCall = activeCallArray[0]; // Get first active call
+
+  // Initialize WebRTC if there's an active call
+  const webRTC = useWebRTC({
+    callId: currentCall?.callId || 'demo-call',
+    isInitiator: !currentCall?.isPlumber || false, // Customer initiates
+    remoteSocketId: currentCall?.plumberSocketId || currentCall?.customerSocketId || 'demo-socket',
+  });
+
+  // Auto-initialize WebRTC connection when component mounts
+  useEffect(() => {
+    if (currentCall && !webRTC.peer && !webRTC.isLoading) {
+      webRTC.initializeConnection();
+    }
+  }, [currentCall, webRTC]);
 
   const sendMessage = () => {
     if (!message.trim()) return;
@@ -73,25 +91,31 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
                   variant="secondary"
                   size="icon"
                   className="w-12 h-12 rounded-full"
-                  onClick={() => setIsMuted(!isMuted)}
+                  onClick={webRTC.toggleMute}
                   data-testid="button-toggle-mic"
                 >
-                  {isMuted ? <MicOff className="text-destructive" /> : <Mic className="text-accent" />}
+                  <Mic className="text-accent" />
                 </Button>
                 <Button
                   variant="secondary"
                   size="icon"
                   className="w-12 h-12 rounded-full"
-                  onClick={() => setIsVideoOn(!isVideoOn)}
+                  onClick={webRTC.toggleVideo}
                   data-testid="button-toggle-video"
                 >
-                  {!isVideoOn ? <VideoOff className="text-destructive" /> : <Video className="text-accent" />}
+                  <Video className="text-accent" />
                 </Button>
                 <Button
                   variant="destructive"
                   size="icon"
                   className="w-12 h-12 rounded-full"
-                  onClick={onEndCall}
+                  onClick={() => {
+                    if (currentCall) {
+                      endCall(currentCall.callId);
+                    }
+                    webRTC.endCall();
+                    onEndCall();
+                  }}
                   data-testid="button-end-call"
                 >
                   <Phone className="text-destructive-foreground" />

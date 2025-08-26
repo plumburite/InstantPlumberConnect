@@ -2,6 +2,7 @@ import { type Plumber, type InsertPlumber, type Call, type InsertCall, type User
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { MongoDBStorage } from './mongodb-storage';
 
 const MemoryStore = createMemoryStore(session);
 
@@ -24,13 +25,21 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
-  sessionStore: session.SessionStore;
+  // Enhanced methods for geolocation and advanced features
+  getNearbyPlumbers?(lat: number, lng: number, maxDistance?: number): Promise<Plumber[]>;
+  updatePlumberLocation?(id: string, lat: number, lng: number): Promise<void>;
+  updatePlumberFCMToken?(id: string, fcmToken: string): Promise<void>;
+  createCallWithLocation?(call: InsertCall, lat: number, lng: number): Promise<Call>;
+  getPendingCalls?(): Promise<Call[]>;
+  searchPlumbers?(filters: any): Promise<Plumber[]>;
+  
+  sessionStore: session.Store;
 }
 
 export class MemStorage implements IStorage {
   private plumbers: Map<string, Plumber>;
   private calls: Map<string, Call>;
-  public sessionStore: session.SessionStore;
+  public sessionStore: session.Store;
 
   constructor() {
     this.plumbers = new Map();
@@ -85,7 +94,8 @@ export class MemStorage implements IStorage {
   async createPlumber(insertPlumber: InsertPlumber): Promise<Plumber> {
     const id = randomUUID();
     const plumber: Plumber = { 
-      ...insertPlumber, 
+      ...insertPlumber,
+      serviceRadius: insertPlumber.serviceRadius || 25,
       id,
       isAvailable: false,
       rating: "4.9",
@@ -116,9 +126,11 @@ export class MemStorage implements IStorage {
   async createCall(insertCall: InsertCall): Promise<Call> {
     const id = randomUUID();
     const call: Call = { 
-      ...insertCall, 
       id,
       plumberId: null,
+      customerName: insertCall.customerName || null,
+      customerLocation: insertCall.customerLocation || null,
+      issueDescription: insertCall.issueDescription || null,
       status: "pending",
       startTime: new Date(),
       endTime: null,
@@ -154,6 +166,32 @@ export class MemStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     return this.createPlumber(user);
   }
+
+  // Enhanced methods - dummy implementations for memory storage
+  async getNearbyPlumbers(lat: number, lng: number, maxDistance?: number): Promise<Plumber[]> {
+    return this.getAvailablePlumbers();
+  }
+
+  async updatePlumberLocation(id: string, lat: number, lng: number): Promise<void> {
+    // No-op for memory storage
+  }
+
+  async updatePlumberFCMToken(id: string, fcmToken: string): Promise<void> {
+    // No-op for memory storage
+  }
+
+  async createCallWithLocation(call: InsertCall, lat: number, lng: number): Promise<Call> {
+    return this.createCall(call);
+  }
+
+  async getPendingCalls(): Promise<Call[]> {
+    return Array.from(this.calls.values()).filter(c => c.status === 'pending');
+  }
+
+  async searchPlumbers(filters: any): Promise<Plumber[]> {
+    return this.getAvailablePlumbers();
+  }
 }
 
-export const storage = new MemStorage();
+// Use MongoDB storage if MONGODB_URI is provided, otherwise use memory storage
+export const storage = process.env.MONGODB_URI ? new MongoDBStorage() : new MemStorage();
