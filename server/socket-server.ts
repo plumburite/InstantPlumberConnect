@@ -184,16 +184,23 @@ export class SocketServer {
             });
           }
 
+          // Get plumber info
+          const plumber = await storage.getPlumber(data.plumberId);
+          
           // Notify customer that plumber accepted
           this.io.to(call.customerSocketId).emit('call_accepted', {
             callId: data.callId,
-            plumber: await storage.getPlumber(data.plumberId),
+            plumber: plumber,
+            plumberSocketId: socket.id,
+            customerSocketId: call.customerSocketId,
           });
 
           // Notify plumber of successful accept
           socket.emit('call_accept_success', {
             callId: data.callId,
             customerInfo: call.customerInfo,
+            customerSocketId: call.customerSocketId,
+            plumberSocketId: socket.id,
           });
 
           // Notify other plumbers that call was taken

@@ -20,9 +20,10 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
   useEffect(() => {
     if (activeCalls.size > 0) {
       const callEntries = Array.from(activeCalls.values());
-      const activeCall = callEntries.find(call => call.status === 'accepted');
+      const acceptedCall = callEntries.find(call => call.status === 'accepted');
       
-      if (activeCall && isConnecting) {
+      if (acceptedCall && isConnecting) {
+        console.log('📹 Call accepted, starting video chat:', acceptedCall);
         setIsConnecting(false);
         onVideoChat();
       }

@@ -72,6 +72,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     newSocket.on('call_accepted', (data) => {
+      console.log('✅ Call accepted by plumber:', data);
       toast({
         title: "Plumber found!",
         description: `${data.plumber.firstName} ${data.plumber.lastName} has accepted your call.`,
@@ -79,7 +80,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       
       setActiveCalls(prev => {
         const updated = new Map(prev);
-        updated.set(data.callId, { ...data, status: 'accepted' });
+        updated.set(data.callId, { 
+          ...data, 
+          status: 'accepted',
+          plumberSocketId: data.plumberSocketId,
+          customerSocketId: data.customerSocketId,
+        });
         return updated;
       });
     });
@@ -135,9 +141,21 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     newSocket.on('call_accept_success', (data) => {
+      console.log('✅ Successfully accepted call:', data);
       toast({
         title: "Call accepted",
         description: `You've accepted the call from ${data.customerInfo.name}.`,
+      });
+      
+      setActiveCalls(prev => {
+        const updated = new Map(prev);
+        updated.set(data.callId, { 
+          ...prev.get(data.callId),
+          status: 'accepted',
+          customerSocketId: data.customerSocketId,
+          plumberSocketId: data.plumberSocketId,
+        });
+        return updated;
       });
     });
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSocket } from "@/hooks/use-socket";
 import NavigationHeader from "@/components/navigation-header";
+import VideoChat from "@/components/video-chat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +16,9 @@ import { useToast } from "@/hooks/use-toast";
 export default function PlumberDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { activeCalls, acceptCall: socketAcceptCall, isConnected } = useSocket();
   const [showNotification, setShowNotification] = useState(false);
+  const [showVideoChat, setShowVideoChat] = useState(false);
 
   // Availability toggle mutation
   const availabilityMutation = useMutation({
@@ -58,13 +62,27 @@ export default function PlumberDashboard() {
     availabilityMutation.mutate(checked);
   };
 
+  // Check if there's an accepted call for this plumber
+  useEffect(() => {
+    if (activeCalls.size > 0) {
+      const callEntries = Array.from(activeCalls.values());
+      const acceptedCall = callEntries.find(call => 
+        call.status === 'accepted' && call.plumberSocketId
+      );
+      
+      if (acceptedCall && !showVideoChat) {
+        console.log('📹 Plumber entering video chat:', acceptedCall);
+        setShowVideoChat(true);
+      }
+    }
+  }, [activeCalls, showVideoChat]);
+
   const acceptCall = () => {
     setShowNotification(false);
     toast({
       title: "Call accepted!",
       description: "Connecting you with the customer...",
     });
-    // In a real app, this would navigate to video chat
   };
 
   const declineCall = () => {
@@ -76,6 +94,11 @@ export default function PlumberDashboard() {
   };
 
   if (!user) return null;
+
+  // Show video chat if there's an active call
+  if (showVideoChat) {
+    return <VideoChat onEndCall={() => setShowVideoChat(false)} />;
+  }
 
   const initials = `${user.firstName[0]}${user.lastName[0]}`;
   const fullName = `${user.firstName} ${user.lastName}`;
@@ -136,6 +159,37 @@ export default function PlumberDashboard() {
           </CardContent>
         </Card>
         
+        {/* Incoming Calls */}
+        {activeCalls.size > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-red-600">🚨 Incoming Emergency Calls</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Array.from(activeCalls.values()).map((call) => (
+                  <div key={call.callId} className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div>
+                      <h3 className="font-semibold">{call.customerName}</h3>
+                      <p className="text-sm text-muted-foreground">{call.issueDescription}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Location: {call.location?.lat?.toFixed(4)}, {call.location?.lng?.toFixed(4)}
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => socketAcceptCall(call.callId)}
+                      className="bg-green-600 hover:bg-green-700"
+                      data-testid={`button-accept-call-${call.callId}`}
+                    >
+                      Accept Call
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
