@@ -20,6 +20,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('FCM Service initialized');
   });
 
+  // Initialize Stripe
+  let stripe: any = null;
+  if (process.env.STRIPE_SECRET_KEY) {
+    const Stripe = require('stripe');
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2023-10-16',
+    });
+    console.log('✅ Stripe initialized');
+  } else {
+    console.log('⚠️ Stripe not initialized - missing STRIPE_SECRET_KEY');
+  }
+
   // Plumber availability toggle
   app.patch("/api/plumber/availability", async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -137,6 +149,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to register FCM token" });
     }
+  });
+
+  // Stripe Payment Intent endpoint
+  app.post("/api/create-payment-intent", async (req, res) => {
+    if (!stripe) {
+      return res.status(500).json({ message: "Payment processing not available" });
+    }
+
+    try {
+      const { amount, description, customerName } = req.body;
+      
+      if (!amount || amount < 0.50) {
+        return res.status(400).json({ message: "Invalid payment amount" });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: 'usd',
+        description: description || 'Plumber Connect Service',
+        metadata: {
+          customerName: customerName || 'Guest Customer',
+          service: 'plumber_connect',
+        },
+      });
+
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      });
+    } catch (error: any) {
+      console.error('Stripe payment intent creation failed:', error);
+      res.status(500).json({ 
+        message: "Payment setup failed", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Payment status webhook endpoint
+  app.post("/api/stripe/webhook", async (req, res) => {
+    if (!stripe) {
+      return res.status(500).json({ message: "Payment processing not available" });
+    }
+
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event;
+
+    try {
+      if (!endpointSecret) {
+        // If no webhook secret, just acknowledge the webhook
+        console.log('⚠️ No webhook secret configured, acknowledging without verification');
+        return res.status(200).json({ received: true });
+      }
+
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err: any) {
+      console.log(`❌ Webhook signature verification failed:`, err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        console.log(`✅ Payment succeeded: ${paymentIntent.id} for ${paymentIntent.amount / 100} ${paymentIntent.currency}`);
+        
+        // Here you could update your database, send notifications, etc.
+        // For example, notify the plumber that payment was received
+        break;
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        console.log(`❌ Payment failed: ${failedPayment.id}`);
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
   });
 
   return httpServer;
