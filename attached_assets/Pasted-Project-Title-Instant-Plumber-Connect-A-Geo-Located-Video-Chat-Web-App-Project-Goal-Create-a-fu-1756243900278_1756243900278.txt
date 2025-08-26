@@ -1,0 +1,72 @@
+Project Title: Instant Plumber Connect - A Geo-Located Video Chat Web App
+
+Project Goal:
+Create a full-stack, mobile-friendly, single-page scrolling web application that instantly connects customers with local plumbers via video chat. The application should be modern, intuitive, and provide a seamless experience for both the customer and the plumber.
+
+Key Features:
+1. For the Customer (End User):
+
+Instant Access: No mandatory sign-up or login required to initiate a call.
+
+Geolocation: Upon visiting the site, the app should request location access to find the nearest available plumber.
+
+Simple Connection: A single, prominent "Connect with a Plumber Now" button to start the search and video call.
+
+Video Interface: A clean and simple video chat window with controls for mute/unmute and end call.
+
+Optional Sign-up/Login: Allow users to create an account to save their history or payment information (though this is a secondary feature).
+
+2. For the Plumber:
+
+Secure Sign-up & Profile: A dedicated sign-up page where plumbers can create an account using email/password. They should be able to create a simple profile with their name, company, and service area radius.
+
+Login Page: A secure login page for returning plumbers.
+
+Availability Toggle: A simple "Available/Unavailable" toggle on their dashboard so they can control when they receive calls.
+
+Push Notifications: When a customer requests a chat, all available plumbers within the customer's vicinity should receive an instant push notification on their device (web push). The first plumber to accept the notification gets the call.
+
+Dashboard: A simple dashboard to view call history and manage profile settings.
+
+Technical Stack & Configuration:
+Front-End:
+
+Framework: React.js (using Vite for a fast setup).
+
+Styling: Tailwind CSS for a modern, responsive, utility-first design.
+
+State Management: React Context or Zustand for managing application state (like user login, call status).
+
+Back-End:
+
+Framework: Node.js with Express.js.
+
+Database: MongoDB with Mongoose for storing plumber profiles and call logs.
+
+Authentication: JWT (JSON Web Tokens) for securing plumber accounts.
+
+Real-Time Communication:
+
+Video Chat: Implement WebRTC for peer-to-peer video and audio communication. Use a library like simple-peer or a service like Twilio WebRTC Go for easier setup.
+
+Signaling: Use Socket.IO or WebSockets for the signaling server required by WebRTC to connect the peers.
+
+Push Notifications: Use Firebase Cloud Messaging (FCM) or a similar service to send push notifications to plumbers.
+
+Design & UI/UX Guidelines:
+Layout: A single-page, vertically scrolling layout.
+
+Theme: Modern, clean, and trustworthy. Use a color palette with blues, whites, and greens.
+
+Mobile-First: Design for mobile screens first, then scale up to tablet and desktop. The app must be fully responsive.
+
+User Flow:
+
+Customer: Lands on the site -> Grants location permission -> Clicks "Connect" -> Waits in a "Finding a plumber..." screen -> Connects to video chat.
+
+Plumber: Signs up/Logs in -> Sets status to "Available" -> Receives a push notification for a new job -> Clicks "Accept" -> Connects to video chat with the customer.
+
+Clarity: Use clear and concise language. Avoid technical jargon. The user interface should be self-explanatory.
+
+Initial Setup:
+Please configure the complete file structure, install all necessary dependencies (package.json for both front-end and back-end), and provide boilerplate code for all the key features mentioned above, including API routes, database schemas, and React components. Include comments in the code to explain the key parts, especially the WebRTC and WebSocket logic.
