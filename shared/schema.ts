@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import { pgTable, text, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -30,6 +30,17 @@ export const calls = pgTable("calls", {
   rating: integer("rating"),
   earnings: text("earnings"),
 });
+
+export const plumbersRelations = relations(plumbers, ({ many }) => ({
+  calls: many(calls),
+}));
+
+export const callsRelations = relations(calls, ({ one }) => ({
+  plumber: one(plumbers, {
+    fields: [calls.plumberId],
+    references: [plumbers.id],
+  }),
+}));
 
 export const insertPlumberSchema = createInsertSchema(plumbers).pick({
   email: true,

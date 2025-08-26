@@ -1,8 +1,11 @@
-import { type Plumber, type InsertPlumber, type Call, type InsertCall, type User, type InsertUser } from "@shared/schema";
+import { type Plumber, type InsertPlumber, type Call, type InsertCall, type User, type InsertUser, plumbers, calls } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { MongoDBStorage } from './mongodb-storage';
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import connectPgSimple from "connect-pg-simple";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -193,5 +196,121 @@ export class MemStorage implements IStorage {
   }
 }
 
-// Use MongoDB storage if MONGODB_URI is provided, otherwise use memory storage
-export const storage = process.env.MONGODB_URI ? new MongoDBStorage() : new MemStorage();
+export class DatabaseStorage implements IStorage {
+  public sessionStore: session.Store;
+
+  constructor() {
+    const PgSession = connectPgSimple(session);
+    this.sessionStore = new PgSession({
+      conObject: {
+        connectionString: process.env.DATABASE_URL,
+      },
+      tableName: 'session',
+      createTableIfMissing: true,
+    });
+  }
+
+  async getPlumber(id: string): Promise<Plumber | undefined> {
+    const [plumber] = await db.select().from(plumbers).where(eq(plumbers.id, id));
+    return plumber || undefined;
+  }
+
+  async getPlumberByEmail(email: string): Promise<Plumber | undefined> {
+    const [plumber] = await db.select().from(plumbers).where(eq(plumbers.email, email));
+    return plumber || undefined;
+  }
+
+  async createPlumber(insertPlumber: InsertPlumber): Promise<Plumber> {
+    const [plumber] = await db
+      .insert(plumbers)
+      .values({
+        ...insertPlumber,
+        serviceRadius: insertPlumber.serviceRadius || 25,
+      })
+      .returning();
+    return plumber;
+  }
+
+  async updatePlumber(id: string, updates: Partial<Plumber>): Promise<Plumber | undefined> {
+    const [plumber] = await db
+      .update(plumbers)
+      .set(updates)
+      .where(eq(plumbers.id, id))
+      .returning();
+    return plumber || undefined;
+  }
+
+  async getAvailablePlumbers(): Promise<Plumber[]> {
+    return await db.select().from(plumbers).where(eq(plumbers.isAvailable, true));
+  }
+
+  async getCall(id: string): Promise<Call | undefined> {
+    const [call] = await db.select().from(calls).where(eq(calls.id, id));
+    return call || undefined;
+  }
+
+  async createCall(insertCall: InsertCall): Promise<Call> {
+    const [call] = await db
+      .insert(calls)
+      .values(insertCall)
+      .returning();
+    return call;
+  }
+
+  async getCallsByPlumber(plumberId: string): Promise<Call[]> {
+    return await db.select().from(calls).where(eq(calls.plumberId, plumberId));
+  }
+
+  async updateCall(id: string, updates: Partial<Call>): Promise<Call | undefined> {
+    const [call] = await db
+      .update(calls)
+      .set(updates)
+      .where(eq(calls.id, id))
+      .returning();
+    return call || undefined;
+  }
+
+  // Legacy user methods for auth compatibility
+  async getUser(id: string): Promise<User | undefined> {
+    return this.getPlumber(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return this.getPlumberByEmail(username);
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    return this.createPlumber(user);
+  }
+
+  // Enhanced methods - database implementations
+  async getNearbyPlumbers(lat: number, lng: number, maxDistance?: number): Promise<Plumber[]> {
+    // For now, return all available plumbers - geolocation can be added later
+    return this.getAvailablePlumbers();
+  }
+
+  async updatePlumberLocation(id: string, lat: number, lng: number): Promise<void> {
+    // Location tracking can be added to schema later if needed
+  }
+
+  async updatePlumberFCMToken(id: string, fcmToken: string): Promise<void> {
+    // FCM token tracking can be added to schema later if needed
+  }
+
+  async createCallWithLocation(call: InsertCall, lat: number, lng: number): Promise<Call> {
+    return this.createCall(call);
+  }
+
+  async getPendingCalls(): Promise<Call[]> {
+    return await db.select().from(calls).where(eq(calls.status, 'pending'));
+  }
+
+  async searchPlumbers(filters: any): Promise<Plumber[]> {
+    return this.getAvailablePlumbers();
+  }
+}
+
+// Use database storage if DATABASE_URL is available, otherwise use MongoDB or memory storage
+export const storage = process.env.DATABASE_URL 
+  ? new DatabaseStorage() 
+  : (process.env.MONGODB_URI ? new MongoDBStorage() : new MemStorage());
