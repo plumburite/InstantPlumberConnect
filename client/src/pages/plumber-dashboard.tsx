@@ -12,6 +12,7 @@ import { Phone, DollarSign, Star, Clock, Bell, BellOff, Video } from "lucide-rea
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { notificationService } from "@/lib/notification-service";
 
 export default function PlumberDashboard() {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ export default function PlumberDashboard() {
   const { activeCalls, acceptCall: socketAcceptCall, isConnected } = useSocket();
   const [showNotification, setShowNotification] = useState(false);
   const [showVideoChat, setShowVideoChat] = useState(false);
+  const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
 
   // Availability toggle mutation
   const availabilityMutation = useMutation({
@@ -48,15 +50,29 @@ export default function PlumberDashboard() {
     enabled: !!user,
   });
 
-  // Simulate incoming call notification
+  // Request notification permission when plumber goes online
   useEffect(() => {
-    if (user?.isAvailable) {
-      const timer = setTimeout(() => {
-        setShowNotification(true);
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (user?.isAvailable && !hasRequestedPermission) {
+      notificationService.requestNotificationPermission();
+      setHasRequestedPermission(true);
     }
-  }, [user?.isAvailable]);
+  }, [user?.isAvailable, hasRequestedPermission]);
+
+  // Handle incoming call notifications with sound alerts
+  useEffect(() => {
+    if (activeCalls.size > 0) {
+      const callEntries = Array.from(activeCalls.values());
+      const newCall = callEntries.find(call => call.status === 'incoming' || call.status === 'searching');
+      
+      if (newCall && user?.isAvailable) {
+        // Play sound and show notification
+        notificationService.showCallNotification(
+          newCall.customerName || 'Customer',
+          newCall.issueDescription || 'Emergency plumbing assistance needed'
+        );
+      }
+    }
+  }, [activeCalls, user?.isAvailable]);
 
   const handleAvailabilityToggle = (checked: boolean) => {
     availabilityMutation.mutate(checked);

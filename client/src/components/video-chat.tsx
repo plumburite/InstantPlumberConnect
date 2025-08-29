@@ -13,6 +13,8 @@ interface VideoChatProps {
 
 export default function VideoChat({ onEndCall }: VideoChatProps) {
   const [message, setMessage] = useState("");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -76,34 +78,66 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
           {/* Main Video Container */}
           <div className="lg:col-span-2 relative">
             <div className="video-container aspect-video mb-4 bg-black rounded-xl overflow-hidden relative">
-              {/* Mock video background representing split screen */}
-              <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                <div className="text-white text-center">
-                  <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg opacity-70">Mock Video Chat Interface</p>
-                  <p className="text-sm opacity-50">WebRTC integration would go here</p>
+              {/* Remote video (main view) */}
+              <video
+                ref={webRTC.remoteVideoRef}
+                autoPlay
+                playsInline
+                muted={false}
+                className="w-full h-full object-cover"
+                data-testid="video-remote"
+              />
+              
+              {/* Fallback when no remote stream */}
+              {!webRTC.remoteStream && (
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                  <div className="text-white text-center">
+                    {webRTC.isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+                        <p className="text-lg">Connecting...</p>
+                      </>
+                    ) : webRTC.error ? (
+                      <>
+                        <VideoOff className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg opacity-70">Connection Failed</p>
+                        <p className="text-sm opacity-50">{webRTC.error}</p>
+                      </>
+                    ) : (
+                      <>
+                        <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg opacity-70">Waiting for remote video...</p>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Video Controls Overlay */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-4">
                 <Button
-                  variant="secondary"
+                  variant={isMuted ? "destructive" : "secondary"}
                   size="icon"
                   className="w-12 h-12 rounded-full"
-                  onClick={webRTC.toggleMute}
+                  onClick={() => {
+                    webRTC.toggleMute();
+                    setIsMuted(!isMuted);
+                  }}
                   data-testid="button-toggle-mic"
                 >
-                  <Mic className="text-accent" />
+                  {isMuted ? <MicOff className="text-destructive-foreground" /> : <Mic className="text-accent" />}
                 </Button>
                 <Button
-                  variant="secondary"
+                  variant={isVideoOff ? "destructive" : "secondary"}
                   size="icon"
                   className="w-12 h-12 rounded-full"
-                  onClick={webRTC.toggleVideo}
+                  onClick={() => {
+                    webRTC.toggleVideo();
+                    setIsVideoOff(!isVideoOff);
+                  }}
                   data-testid="button-toggle-video"
                 >
-                  <Video className="text-accent" />
+                  {isVideoOff ? <VideoOff className="text-destructive-foreground" /> : <Video className="text-accent" />}
                 </Button>
                 <Button
                   variant="destructive"
@@ -125,14 +159,32 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
             
             {/* My Video (Small) - Picture in Picture */}
             <div className="absolute top-4 right-4 w-48 h-36 bg-black rounded-xl overflow-hidden border-2 border-white/20">
-              <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
-                <div className="text-white text-center">
-                  <div className="w-8 h-8 bg-white/20 rounded-full mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-sm">You</span>
+              <video
+                ref={webRTC.localVideoRef}
+                autoPlay
+                playsInline
+                muted={true}
+                className="w-full h-full object-cover"
+                data-testid="video-local"
+              />
+              
+              {/* Fallback when no local stream */}
+              {!webRTC.localStream && (
+                <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
+                  <div className="text-white text-center">
+                    {webRTC.isLoading ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto"></div>
+                    ) : (
+                      <>
+                        <div className="w-8 h-8 bg-white/20 rounded-full mx-auto mb-2 flex items-center justify-center">
+                          <span className="text-sm">You</span>
+                        </div>
+                        <p className="text-xs opacity-70">Your camera</p>
+                      </>
+                    )}
                   </div>
-                  <p className="text-xs opacity-70">Your camera</p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
           

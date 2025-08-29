@@ -21,6 +21,7 @@ export default function AuthPage() {
     lastName: "",
     company: "",
     licenseNumber: "",
+    phoneNumber: "",
     serviceRadius: "25",
   });
 
@@ -192,6 +193,18 @@ export default function AuthPage() {
                           onChange={(e) => updateRegisterForm("licenseNumber", e.target.value)}
                           required
                           data-testid="input-register-license"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          placeholder="+1 (555) 123-4567"
+                          value={registerForm.phoneNumber}
+                          onChange={(e) => updateRegisterForm("phoneNumber", e.target.value)}
+                          required
+                          data-testid="input-register-phone"
                         />
                       </div>
                       <div>

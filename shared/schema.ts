@@ -11,6 +11,7 @@ export const plumbers = pgTable("plumbers", {
   lastName: text("last_name").notNull(),
   company: text("company").notNull(),
   licenseNumber: text("license_number").notNull(),
+  phoneNumber: text("phone_number").notNull(),
   serviceRadius: integer("service_radius").notNull().default(25),
   isAvailable: boolean("is_available").notNull().default(false),
   rating: text("rating").default("4.9"),
@@ -22,6 +23,7 @@ export const calls = pgTable("calls", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   plumberId: varchar("plumber_id").references(() => plumbers.id),
   customerName: text("customer_name"),
+  customerPhone: text("customer_phone").notNull(),
   customerLocation: text("customer_location"),
   issueDescription: text("issue_description"),
   status: text("status").notNull().default("pending"), // pending, active, completed, cancelled
@@ -49,11 +51,13 @@ export const insertPlumberSchema = createInsertSchema(plumbers).pick({
   lastName: true,
   company: true,
   licenseNumber: true,
+  phoneNumber: true,
   serviceRadius: true,
 });
 
 export const insertCallSchema = createInsertSchema(calls).pick({
   customerName: true,
+  customerPhone: true,
   customerLocation: true,
   issueDescription: true,
 });

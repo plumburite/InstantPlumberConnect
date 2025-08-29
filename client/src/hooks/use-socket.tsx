@@ -174,6 +174,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   const initiateCall = useCallback((data: {
     customerName: string;
+    customerPhone: string;
     issueDescription: string;
     location: { lat: number; lng: number };
   }) => {

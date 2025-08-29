@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { storage } from './storage';
 import { insertCallSchema } from '@shared/schema';
+import { twilioService } from './twilio-service';
 
 interface ConnectedUser {
   userId?: string;
@@ -79,6 +80,7 @@ export class SocketServer {
       // Handle customer initiating a call
       socket.on('initiate_call', async (data: {
         customerName: string;
+        customerPhone: string;
         issueDescription: string;
         location: { lat: number; lng: number };
       }) => {
@@ -105,6 +107,7 @@ export class SocketServer {
           if (storage.createCallWithLocation) {
             await storage.createCallWithLocation({
               customerName: data.customerName,
+              customerPhone: data.customerPhone,
               customerLocation: `${data.location.lat}, ${data.location.lng}`,
               issueDescription: data.issueDescription,
             }, data.location.lat, data.location.lng);
@@ -135,7 +138,8 @@ export class SocketServer {
           socket.emit('call_searching', { callId: callSession.id });
 
           // Send call notification to nearby plumbers
-          nearbyPlumbers.forEach((plumber) => {
+          nearbyPlumbers.forEach(async (plumber) => {
+            // Send socket notification
             this.io.to(`plumber_${plumber.id}`).emit('incoming_call', {
               callId: callSession.id,
               customerName: data.customerName,
@@ -143,6 +147,16 @@ export class SocketServer {
               location: data.location,
               distance: this.calculateDistance(data.location.lat, data.location.lng, 0, 0), // Would use plumber location
             });
+
+            // Send SMS notification if phone number is available
+            if (plumber.phoneNumber && twilioService.isReady()) {
+              await twilioService.sendPlumberCallNotification(
+                plumber.phoneNumber,
+                `${plumber.firstName} ${plumber.lastName}`,
+                data.customerName,
+                data.issueDescription
+              );
+            }
           });
 
           // Set timeout for call expiry

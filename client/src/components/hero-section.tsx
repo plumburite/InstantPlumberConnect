@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { MapPin, Video, Shield, Clock, Star, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/use-socket";
@@ -12,7 +15,13 @@ interface HeroSectionProps {
 export default function HeroSection({ onVideoChat }: HeroSectionProps) {
   const [locationGranted, setLocationGranted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showCallForm, setShowCallForm] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [customerForm, setCustomerForm] = useState({
+    name: "",
+    phone: "",
+    issue: "",
+  });
   const { toast } = useToast();
   const { initiateCall, isConnected, activeCalls } = useSocket();
 
@@ -61,7 +70,7 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
     }
   };
 
-  const startConnection = () => {
+  const showForm = () => {
     if (!userLocation) {
       toast({
         title: "Location required",
@@ -80,12 +89,46 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
       return;
     }
 
+    setShowCallForm(true);
+  };
+
+  const startConnection = () => {
+    // Validate form
+    if (!customerForm.name.trim()) {
+      toast({
+        title: "Name required",
+        description: "Please enter your name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!customerForm.phone.trim()) {
+      toast({
+        title: "Phone required",
+        description: "Please enter your phone number for SMS notifications.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!customerForm.issue.trim()) {
+      toast({
+        title: "Issue description required",
+        description: "Please describe your plumbing issue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsConnecting(true);
+    setShowCallForm(false);
     
     initiateCall({
-      customerName: "Guest Customer",
-      issueDescription: "Emergency plumbing assistance needed",
-      location: userLocation,
+      customerName: customerForm.name,
+      customerPhone: customerForm.phone,
+      issueDescription: customerForm.issue,
+      location: userLocation!,
     });
   };
 
@@ -127,10 +170,10 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
               </Card>
             )}
             
-            {locationGranted && !isConnecting && (
+            {locationGranted && !isConnecting && !showCallForm && (
               <div className="slide-in" data-testid="connect-section">
                 <Button 
-                  onClick={startConnection}
+                  onClick={showForm}
                   size="lg"
                   className="bg-accent text-accent-foreground px-12 py-4 text-xl font-semibold hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg"
                   data-testid="button-connect-plumber"
@@ -139,6 +182,75 @@ export default function HeroSection({ onVideoChat }: HeroSectionProps) {
                   Connect with Plumber Now
                 </Button>
               </div>
+            )}
+
+            {showCallForm && (
+              <Card className="glass-effect max-w-lg mx-auto" data-testid="card-customer-form">
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    <div className="text-center mb-6">
+                      <h3 className="text-xl font-semibold">Your Details</h3>
+                      <p className="text-muted-foreground">We'll connect you with the nearest available plumber</p>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="customer-name">Your Name</Label>
+                      <Input
+                        id="customer-name"
+                        type="text"
+                        placeholder="Enter your full name"
+                        value={customerForm.name}
+                        onChange={(e) => setCustomerForm(prev => ({ ...prev, name: e.target.value }))}
+                        data-testid="input-customer-name"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="customer-phone">Phone Number</Label>
+                      <Input
+                        id="customer-phone"
+                        type="tel"
+                        placeholder="+1 (555) 123-4567"
+                        value={customerForm.phone}
+                        onChange={(e) => setCustomerForm(prev => ({ ...prev, phone: e.target.value }))}
+                        data-testid="input-customer-phone"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">For SMS notifications about your call</p>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="customer-issue">Describe Your Issue</Label>
+                      <Textarea
+                        id="customer-issue"
+                        placeholder="e.g., Kitchen sink is leaking under the cabinet"
+                        value={customerForm.issue}
+                        onChange={(e) => setCustomerForm(prev => ({ ...prev, issue: e.target.value }))}
+                        rows={3}
+                        data-testid="textarea-customer-issue"
+                      />
+                    </div>
+                    
+                    <div className="flex space-x-3 pt-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowCallForm(false)}
+                        className="flex-1"
+                        data-testid="button-cancel-form"
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={startConnection}
+                        className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                        data-testid="button-submit-call"
+                      >
+                        <Video className="w-4 h-4 mr-2" />
+                        Start Call
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             {isConnecting && (
