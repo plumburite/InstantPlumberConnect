@@ -9,6 +9,7 @@ interface SocketContextType {
   activeCalls: Map<string, any>;
   initiateCall: (data: {
     customerName: string;
+    customerPhone: string;
     issueDescription: string;
     location: { lat: number; lng: number };
   }) => void;

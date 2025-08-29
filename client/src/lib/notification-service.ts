@@ -141,10 +141,6 @@ class NotificationService {
         icon: '/favicon.ico',
         tag: 'incoming-call',
         requireInteraction: true,
-        actions: [
-          { action: 'accept', title: 'Accept Call' },
-          { action: 'decline', title: 'Decline' }
-        ]
       }
     );
 
