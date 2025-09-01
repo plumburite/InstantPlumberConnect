@@ -9,6 +9,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import PlumberDashboard from "@/pages/plumber-dashboard";
+import CrmDashboard from "@/pages/crm-dashboard";
 import StripeCheckout from "@/pages/stripe-checkout";
 import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/dashboard" component={() => <PlumberDashboard />} />
+      <ProtectedRoute path="/crm" component={() => <CrmDashboard />} />
       <Route path="/checkout" component={StripeCheckout} />
       <Route path="/payment-success" component={PaymentSuccess} />
       <Route component={NotFound} />

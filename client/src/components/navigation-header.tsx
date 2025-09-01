@@ -23,8 +23,11 @@ export default function NavigationHeader() {
           <div className="flex items-center space-x-4">
             {user ? (
               <>
-                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Link href="/dashboard" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/dashboard' ? 'text-foreground font-medium' : ''}`}>
                   Dashboard
+                </Link>
+                <Link href="/crm" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/crm' ? 'text-foreground font-medium' : ''}`}>
+                  CRM
                 </Link>
                 <Button 
                   variant="outline" 

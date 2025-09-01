@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Video, VideoOff, Phone, Send, Star } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
 import { useWebRTC } from "@/hooks/use-webrtc";
+import CallCompletion from "./call-completion";
 
 interface VideoChatProps {
   onEndCall: () => void;
@@ -15,6 +16,7 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
   const [message, setMessage] = useState("");
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [showCallCompletion, setShowCallCompletion] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -144,11 +146,17 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
                   size="icon"
                   className="w-12 h-12 rounded-full"
                   onClick={() => {
-                    if (currentCall) {
-                      endCall(currentCall.callId);
+                    // Check if this is a plumber ending the call
+                    if (currentCall?.isPlumber) {
+                      setShowCallCompletion(true);
+                    } else {
+                      // Customer ending call - end immediately
+                      if (currentCall) {
+                        endCall(currentCall.callId);
+                      }
+                      webRTC.endCall();
+                      onEndCall();
                     }
-                    webRTC.endCall();
-                    onEndCall();
                   }}
                   data-testid="button-end-call"
                 >
@@ -257,6 +265,33 @@ export default function VideoChat({ onEndCall }: VideoChatProps) {
           </Card>
         </div>
       </div>
+      
+      {/* Call Completion Workflow for Plumbers */}
+      {showCallCompletion && currentCall && (
+        <CallCompletion
+          callId={currentCall.callId}
+          customerName={currentCall.customerInfo?.name || "Customer"}
+          customerPhone={currentCall.customerInfo?.phoneNumber}
+          onComplete={() => {
+            // Complete the call workflow and end the video chat
+            if (currentCall) {
+              endCall(currentCall.callId);
+            }
+            webRTC.endCall();
+            setShowCallCompletion(false);
+            onEndCall();
+          }}
+          onCancel={() => {
+            // End call without logging services
+            if (currentCall) {
+              endCall(currentCall.callId);
+            }
+            webRTC.endCall();
+            setShowCallCompletion(false);
+            onEndCall();
+          }}
+        />
+      )}
     </section>
   );
 }
