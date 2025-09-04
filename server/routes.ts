@@ -45,8 +45,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         formattedPhone = '+1' + formattedPhone.replace(/[^\d]/g, '');
       }
 
+      // Store code with original phone number for verification consistency
+      const normalizedPhone = phoneNumber.trim();
+      
       console.log(`📞 Sending verification code to: ${formattedPhone}`);
       console.log(`🔢 Generated code: ${code} (for testing)`);
+      console.log(`🗂️ Storing with key: ${normalizedPhone}`);
 
       let smsSuccess = false;
       
@@ -69,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Development/Testing fallback - always works
-      console.log(`🧪 Development mode: Use code ${code} for phone ${phoneNumber}`);
+      console.log(`🧪 Development mode: Use code ${code} for phone ${normalizedPhone}`);
       res.json({ 
         message: "Code generated for testing - check server console",
         development: true
@@ -95,7 +99,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Phone number and code are required" });
       }
 
-      const authData = authCodes.get(phoneNumber);
+      // Normalize phone number for lookup
+      const normalizedPhone = phoneNumber.trim();
+      console.log(`🔍 Looking up verification code for: ${normalizedPhone}`);
+      console.log(`📝 Available codes:`, Array.from(authCodes.keys()));
+
+      const authData = authCodes.get(normalizedPhone);
       if (!authData) {
         return res.status(400).json({ message: "No verification code found" });
       }

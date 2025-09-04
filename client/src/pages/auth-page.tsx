@@ -75,11 +75,11 @@ export default function AuthPage() {
         <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
-              <h1 className="text-3xl font-bold">Plumber Access</h1>
+              <h1 className="text-3xl font-bold">Plumber Registration</h1>
               <p className="text-muted-foreground mt-2">
                 {step === 'phone' 
-                  ? 'Enter your details to get started' 
-                  : 'Verify your phone number to access your dashboard'
+                  ? 'Join our network of professional plumbers' 
+                  : 'Verify your phone number to complete registration'
                 }
               </p>
             </div>
