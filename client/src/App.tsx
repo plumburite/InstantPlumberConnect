@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { SocketProvider } from "@/hooks/use-socket";
 import { SMSProvider } from "@/hooks/use-sms";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -16,12 +16,20 @@ import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <Switch>
-      <Route path="/" component={HomePage} />
+      {isLoading || !isAuthenticated ? (
+        <Route path="/" component={HomePage} />
+      ) : (
+        <>
+          <Route path="/" component={PlumberDashboard} />
+          <ProtectedRoute path="/dashboard" component={() => <PlumberDashboard />} />
+          <ProtectedRoute path="/crm" component={() => <CrmDashboard />} />
+        </>
+      )}
       <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/dashboard" component={() => <PlumberDashboard />} />
-      <ProtectedRoute path="/crm" component={() => <CrmDashboard />} />
       <Route path="/checkout" component={StripeCheckout} />
       <Route path="/payment-success" component={PaymentSuccess} />
       <Route component={NotFound} />

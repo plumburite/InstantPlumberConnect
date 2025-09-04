@@ -1,9 +1,9 @@
 import { 
-  type Plumber, type InsertPlumber, type Call, type InsertCall, type User, type InsertUser,
+  type Plumber, type InsertPlumber, type Call, type InsertCall, type User, type UpsertUser,
   type Customer, type InsertCustomer, type Service, type InsertService,
   type Inventory, type InsertInventory, type Invoice, type InsertInvoice,
   type InvoiceItem, type InsertInvoiceItem, type File, type InsertFile,
-  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files 
+  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files, users
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
@@ -16,6 +16,10 @@ import connectPgSimple from "connect-pg-simple";
 const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
+  // User operations for Replit Auth
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+
   // Plumber management
   getPlumber(id: string): Promise<Plumber | undefined>;
   getPlumberByEmail(email: string): Promise<Plumber | undefined>;
@@ -96,6 +100,7 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
+  private users: Map<string, User>;
   private plumbers: Map<string, Plumber>;
   private calls: Map<string, Call>;
   private customers: Map<string, Customer>;
@@ -570,6 +575,26 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // User operations for Replit Auth
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
   public sessionStore: session.Store;
 
   constructor() {
