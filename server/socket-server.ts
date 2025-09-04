@@ -48,7 +48,6 @@ export class SocketServer {
     });
 
     this.setupSocketHandlers();
-    console.log('✅ Socket.IO server initialized');
   }
 
   private setupSocketHandlers() {

@@ -13,8 +13,6 @@ import PlumberLogin from "@/pages/plumber-login";
 import CustomerLogin from "@/pages/customer-login";
 import PlumberDashboard from "@/pages/plumber-dashboard";
 import CrmDashboard from "@/pages/crm-dashboard";
-import StripeCheckout from "@/pages/stripe-checkout";
-import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -35,8 +33,6 @@ function Router() {
       <Route path="/signup" component={AuthPage} />
       <Route path="/plumber/login" component={PlumberLogin} />
       <Route path="/customer/login" component={CustomerLogin} />
-      <Route path="/checkout" component={StripeCheckout} />
-      <Route path="/payment-success" component={PaymentSuccess} />
       <Route component={NotFound} />
     </Switch>
   );

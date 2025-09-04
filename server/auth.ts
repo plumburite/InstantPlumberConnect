@@ -34,6 +34,8 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "plumber-connect-secret-key-dev",
     resave: false,
@@ -41,7 +43,9 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: false, // Set to true in production with HTTPS
+      secure: isProduction, // Always secure in production with HTTPS
+      httpOnly: true, // Prevent XSS attacks
+      sameSite: isProduction ? 'strict' : 'lax', // CSRF protection
     },
   };
 

@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, MessageSquare, Clock, MapPin } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useSocket } from "@/hooks/use-socket";
+import { useToast } from "@/hooks/use-toast";
 
 export default function CustomerLogin() {
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const { initiateCall, activeCalls, isConnected } = useSocket();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<'phone' | 'waiting'>('phone');
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -17,17 +23,87 @@ export default function CustomerLogin() {
     code: ''
   });
 
+  // Listen for call status changes
+  useEffect(() => {
+    if (activeCalls.size > 0) {
+      const callEntries = Array.from(activeCalls.values());
+      const acceptedCall = callEntries.find(call => call.status === 'accepted');
+      
+      if (acceptedCall) {
+        toast({
+          title: "Plumber found!",
+          description: "Connecting you to video chat...",
+        });
+        // Redirect to video chat - you can create a video chat page or modal
+        setLocation('/video-chat');
+      }
+    }
+  }, [activeCalls, toast, setLocation]);
+
+  const requestLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          toast({
+            title: "Location granted",
+            description: "We can now find plumbers near you!",
+          });
+        },
+        (error) => {
+          toast({
+            title: "Location required",
+            description: "Location access is needed to find nearby plumbers.",
+            variant: "destructive",
+          });
+        }
+      );
+    }
+  };
+
   const handleRequestCall = (e: React.FormEvent) => {
     e.preventDefault();
-    // This would connect to the call system
-    console.log("Customer requesting call:", formData);
-    setStep('code');
+    
+    if (!userLocation) {
+      toast({
+        title: "Location required",
+        description: "Please share your location to find nearby plumbers.",
+        variant: "destructive",
+      });
+      requestLocation();
+      return;
+    }
+
+    if (!isConnected) {
+      toast({
+        title: "Connection error",
+        description: "Unable to connect to the service. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Initiate the call through Socket.IO
+    initiateCall({
+      customerName: `${formData.firstName} ${formData.lastName}`,
+      customerPhone: formData.phoneNumber,
+      issueDescription: formData.issue,
+      location: userLocation,
+    });
+
+    setStep('waiting');
+    toast({
+      title: "Searching for plumbers",
+      description: "Looking for available plumbers in your area...",
+    });
   };
 
   const handleVerifyCall = (e: React.FormEvent) => {
     e.preventDefault();
-    // This would verify and connect to plumber
-    console.log("Connecting customer to plumber with code:", formData.code);
+    // No longer needed - automatically handled by socket events
   };
 
   const updateForm = (field: keyof typeof formData, value: string) => {
@@ -65,7 +141,7 @@ export default function CustomerLogin() {
               <p className="text-muted-foreground mt-2">
                 {step === 'phone' 
                   ? 'Connect with a local plumber via video call' 
-                  : 'Connecting you with available plumbers...'
+                  : 'Searching for available plumbers in your area...'
                 }
               </p>
             </div>
@@ -73,7 +149,7 @@ export default function CustomerLogin() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {step === 'phone' ? 'Request Video Call' : 'Waiting for Plumber'}
+                  {step === 'phone' ? 'Request Video Call' : 'Finding Available Plumbers'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -160,7 +236,7 @@ export default function CustomerLogin() {
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
                       <h3 className="font-semibold mb-2">Finding Available Plumbers...</h3>
                       <p className="text-sm text-muted-foreground">
-                        We're connecting you with qualified plumbers in your area
+                        Searching for qualified plumbers in your area. You'll be connected automatically when one becomes available.
                       </p>
                     </div>
 
