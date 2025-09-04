@@ -41,8 +41,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Format phone number (ensure it starts with +)
       let formattedPhone = phoneNumber.trim();
       if (!formattedPhone.startsWith('+')) {
-        // Assume US number if no country code
-        formattedPhone = '+1' + formattedPhone.replace(/[^\d]/g, '');
+        // Clean the number to digits only
+        const digitsOnly = formattedPhone.replace(/[^\d]/g, '');
+        
+        // If it already starts with 1 (US country code), use it as is
+        if (digitsOnly.startsWith('1') && digitsOnly.length === 11) {
+          formattedPhone = '+' + digitsOnly;
+        } else {
+          // Otherwise assume US number and add +1
+          formattedPhone = '+1' + digitsOnly;
+        }
       }
 
       // Store code with original phone number for verification consistency
