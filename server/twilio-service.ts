@@ -42,6 +42,7 @@ class TwilioService {
     }
 
     try {
+      console.log(`📞 Attempting to send SMS from ${this.fromNumber} to ${to}`);
       const result = await this.client.messages.create({
         body: message,
         from: this.fromNumber,
@@ -52,6 +53,14 @@ class TwilioService {
       return true;
     } catch (error: any) {
       console.error(`❌ Failed to send SMS to ${to}:`, error.message);
+      console.error(`❌ Error details:`, error);
+      
+      // If trial account, suggest using verified number
+      if (error.message?.includes('trial') || error.message?.includes('Authenticate')) {
+        console.error(`💡 Trial account detected. You can only send SMS to verified numbers.`);
+        console.error(`💡 To test: Either verify ${to} in Twilio Console, or upgrade to paid account.`);
+      }
+      
       return false;
     }
   }

@@ -189,6 +189,12 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getPlumberByPhone(phoneNumber: string): Promise<Plumber | undefined> {
+    return Array.from(this.plumbers.values()).find(
+      (plumber) => plumber.phoneNumber === phoneNumber,
+    );
+  }
+
   async createPlumber(insertPlumber: InsertPlumber): Promise<Plumber> {
     const id = randomUUID();
     const plumber: Plumber = { 
@@ -612,6 +618,11 @@ export class DatabaseStorage implements IStorage {
 
   async getPlumberByEmail(email: string): Promise<Plumber | undefined> {
     const [plumber] = await db.select().from(plumbers).where(eq(plumbers.email, email));
+    return plumber || undefined;
+  }
+
+  async getPlumberByPhone(phoneNumber: string): Promise<Plumber | undefined> {
+    const [plumber] = await db.select().from(plumbers).where(eq(plumbers.phoneNumber, phoneNumber));
     return plumber || undefined;
   }
 
