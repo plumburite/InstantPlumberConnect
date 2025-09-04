@@ -14,7 +14,10 @@ export function initializeFirebaseAdmin() {
       : null;
 
     if (!serviceAccount) {
-      console.log('⚠️  Firebase Admin SDK not initialized - missing service account key');
+      // Only log warning in production - Firebase is optional for development
+      if (process.env.NODE_ENV === 'production') {
+        console.log('⚠️  Firebase Admin SDK not initialized - missing service account key');
+      }
       return null;
     }
 
