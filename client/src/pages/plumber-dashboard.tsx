@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
+import { useNotifications } from "@/hooks/use-notifications";
 import NavigationHeader from "@/components/navigation-header";
 import VideoChat from "@/components/video-chat";
+import { NotificationPopup } from "@/components/notification-popup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +14,13 @@ import { Phone, DollarSign, Star, Clock, Bell, BellOff, Video } from "lucide-rea
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { notificationService } from "@/lib/notification-service";
 
 export default function PlumberDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { activeCalls, acceptCall: socketAcceptCall, isConnected } = useSocket();
-  const [showNotification, setShowNotification] = useState(false);
+  const { requestPermission, showNotification, playNotificationSound } = useNotifications();
+  const [currentNotification, setCurrentNotification] = useState<any>(null);
   const [showVideoChat, setShowVideoChat] = useState(false);
   const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
 
@@ -53,10 +55,10 @@ export default function PlumberDashboard() {
   // Request notification permission when plumber goes online
   useEffect(() => {
     if (user?.isAvailable && !hasRequestedPermission) {
-      notificationService.requestNotificationPermission();
+      requestPermission();
       setHasRequestedPermission(true);
     }
-  }, [user?.isAvailable, hasRequestedPermission]);
+  }, [user?.isAvailable, hasRequestedPermission, requestPermission]);
 
   // Handle incoming call notifications with sound alerts
   useEffect(() => {
@@ -66,13 +68,29 @@ export default function PlumberDashboard() {
       
       if (newCall && user?.isAvailable) {
         // Play sound and show notification
-        notificationService.showCallNotification(
-          newCall.customerName || 'Customer',
-          newCall.issueDescription || 'Emergency plumbing assistance needed'
+        playNotificationSound();
+        showNotification(
+          '🔧 New Plumbing Call!',
+          {
+            body: `${newCall.customerName || 'Customer'}: ${newCall.issueDescription || 'Emergency plumbing assistance needed'}`,
+            icon: '/favicon.ico',
+            requireInteraction: true,
+          }
         );
+        
+        // Set notification popup
+        setCurrentNotification({
+          id: `notification-${newCall.id}`,
+          callId: newCall.id,
+          customerName: newCall.customerName || 'Customer',
+          issueDescription: newCall.issueDescription || 'Emergency plumbing assistance needed',
+          location: newCall.location || { lat: 0, lng: 0 },
+          distance: '2.3 km', // TODO: Calculate actual distance
+          timestamp: new Date(),
+        });
       }
     }
-  }, [activeCalls, user?.isAvailable]);
+  }, [activeCalls, user?.isAvailable, playNotificationSound, showNotification]);
 
   const handleAvailabilityToggle = (checked: boolean) => {
     availabilityMutation.mutate(checked);
@@ -93,20 +111,27 @@ export default function PlumberDashboard() {
     }
   }, [activeCalls, showVideoChat]);
 
-  const acceptCall = () => {
-    setShowNotification(false);
+  const acceptCallHandler = (callId: string) => {
+    socketAcceptCall(callId);
+    setShowVideoChat(true);
+    setCurrentNotification(null);
     toast({
       title: "Call accepted!",
       description: "Connecting you with the customer...",
     });
   };
 
-  const declineCall = () => {
-    setShowNotification(false);
+  const declineCallHandler = (callId: string) => {
+    // TODO: Implement decline call logic via socket
+    setCurrentNotification(null);
     toast({
       title: "Call declined",
       description: "The call has been passed to another plumber.",
     });
+  };
+
+  const dismissNotification = () => {
+    setCurrentNotification(null);
   };
 
   if (!user) return null;
@@ -355,6 +380,14 @@ export default function PlumberDashboard() {
           </Card>
         </div>
       </main>
+
+      {/* Notification Popup */}
+      <NotificationPopup
+        notification={currentNotification}
+        onAccept={acceptCallHandler}
+        onDecline={declineCallHandler}
+        onDismiss={dismissNotification}
+      />
     </div>
   );
 }

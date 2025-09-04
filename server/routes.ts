@@ -85,9 +85,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("❌ Send code error:", error);
       
       // Still generate code for testing even if SMS fails
+      const { phoneNumber, firstName, lastName } = req.body;
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expires = Date.now() + 10 * 60 * 1000;
-      authCodes.set(phoneNumber, { code, expires, firstName, lastName });
+      authCodes.set(phoneNumber, { code, expires, firstName: firstName || '', lastName: lastName || '' });
       
       res.json({ message: "SMS unavailable - using test mode (check console)", testCode: code });
     }
@@ -226,7 +227,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           licenseNumber: "TEMP-" + Date.now(),
           serviceRadius: 25,
           isAvailable: Boolean(isAvailable),
-          userId: userId
         });
       } else {
         const updatedPlumber = await storage.updatePlumber(userId, {

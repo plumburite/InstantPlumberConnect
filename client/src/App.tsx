@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { SocketProvider } from "@/hooks/use-socket";
 import { SMSProvider } from "@/hooks/use-sms";
+import { NotificationProvider } from "@/hooks/use-notifications";
 import { ProtectedRoute } from "./lib/protected-route";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
@@ -44,10 +45,12 @@ function App() {
       <AuthProvider>
         <SocketProvider>
           <SMSProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
+            <NotificationProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </NotificationProvider>
           </SMSProvider>
         </SocketProvider>
       </AuthProvider>

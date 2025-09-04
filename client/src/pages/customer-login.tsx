@@ -253,7 +253,7 @@ export default function CustomerLogin() {
                     <Button 
                       type="button" 
                       variant="outline"
-                      onClick={() => setStep('phone')}
+                      onClick={() => setStep('form')}
                       className="w-full"
                       data-testid="button-back"
                     >
