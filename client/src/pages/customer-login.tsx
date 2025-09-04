@@ -12,7 +12,7 @@ export default function CustomerLogin() {
   const { initiateCall, activeCalls, isConnected } = useSocket();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<'phone' | 'waiting'>('phone');
+  const [step, setStep] = useState<'form' | 'waiting'>('form');
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -139,7 +139,7 @@ export default function CustomerLogin() {
             <div className="text-center">
               <h1 className="text-3xl font-bold">Get Instant Plumber Help</h1>
               <p className="text-muted-foreground mt-2">
-                {step === 'phone' 
+                {step === 'form' 
                   ? 'Connect with a local plumber via video call' 
                   : 'Searching for available plumbers in your area...'
                 }
@@ -149,11 +149,11 @@ export default function CustomerLogin() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {step === 'phone' ? 'Request Video Call' : 'Finding Available Plumbers'}
+                  {step === 'form' ? 'Request Video Call' : 'Finding Available Plumbers'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {step === 'phone' ? (
+                {step === 'form' ? (
                   <form onSubmit={handleRequestCall} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>

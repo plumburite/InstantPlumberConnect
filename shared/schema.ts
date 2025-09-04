@@ -216,15 +216,9 @@ export const filesRelations = relations(files, ({ one }) => ({
 }));
 
 // Insert Schemas and Types
-export const insertPlumberSchema = createInsertSchema(plumbers).pick({
-  userId: true,
-  email: true,
-  firstName: true,
-  lastName: true,
-  company: true,
-  licenseNumber: true,
-  phoneNumber: true,
-  serviceRadius: true,
+export const insertPlumberSchema = createInsertSchema(plumbers).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -286,5 +280,5 @@ export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type InsertFile = z.infer<typeof insertFileSchema>;
 export type File = typeof files.$inferSelect;
 
-export type UpsertUser = typeof users.$inferInsert;
-export type User = typeof users.$inferSelect;
+// User type is now Plumber
+export type User = typeof plumbers.$inferSelect;
