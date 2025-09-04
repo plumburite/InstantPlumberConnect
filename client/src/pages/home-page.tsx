@@ -1,40 +1,9 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MapPin, Clock, Star, Phone, MessageSquare, Wrench, Shield, Users } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { MapPin, Clock, Star, Phone, MessageSquare, Wrench, Shield, Users, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 
 export default function HomePage() {
-  const { sendCodeMutation, verifyCodeMutation } = useAuth();
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
-  const [formData, setFormData] = useState({
-    phoneNumber: '',
-    firstName: '',
-    lastName: '',
-    code: ''
-  });
-
-  const handleSendCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
-      firstName: formData.firstName,
-      lastName: formData.lastName
-    }, {
-      onSuccess: () => setStep('code')
-    });
-  };
-
-  const handleVerifyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    verifyCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
-      code: formData.code
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <header className="bg-white shadow-sm">
@@ -49,134 +18,97 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Hero Section */}
-          <div>
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Connect with Local Plumbers Instantly
-            </h2>
-            <p className="text-xl text-gray-600 mb-8">
-              Get instant video calls with certified plumbers in your area. 
-              Manage customers, send SMS notifications, and run your plumbing business efficiently.
-            </p>
+        <div className="text-center mb-16">
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            Connect with Local Plumbers Instantly
+          </h2>
+          <p className="text-xl text-gray-600 mb-8">
+            Whether you need plumbing help or you're a plumber looking for customers, 
+            we connect you instantly through video calls.
+          </p>
+        </div>
 
-            {/* Features Grid */}
-            <div className="grid gap-6 mb-8">
-              <div className="flex items-start gap-3">
-                <Phone className="h-6 w-6 text-blue-600 mt-1" />
-                <div>
-                  <h3 className="font-semibold text-gray-900">Video Calls</h3>
-                  <p className="text-gray-600">Connect with customers via instant video calls</p>
-                </div>
+        {/* Two-Column Options */}
+        <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+          {/* Customer Option */}
+          <Card className="relative overflow-hidden border-2 hover:border-blue-300 transition-all duration-300 transform hover:scale-105">
+            <CardHeader className="pb-4">
+              <div className="w-16 h-16 mx-auto bg-blue-600 rounded-full flex items-center justify-center mb-4">
+                <Phone className="w-8 h-8 text-white" />
               </div>
-              <div className="flex items-start gap-3">
-                <MessageSquare className="h-6 w-6 text-blue-600 mt-1" />
-                <div>
-                  <h3 className="font-semibold text-gray-900">SMS Notifications</h3>
-                  <p className="text-gray-600">Send appointment reminders and service updates</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Users className="h-6 w-6 text-blue-600 mt-1" />
-                <div>
-                  <h3 className="font-semibold text-gray-900">Customer Management</h3>
-                  <p className="text-gray-600">Complete CRM system for your business</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* SMS Login Form */}
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle className="text-center">
-                {step === 'phone' ? 'Get Started' : 'Enter Verification Code'}
-              </CardTitle>
+              <CardTitle className="text-2xl text-center">I Need a Plumber</CardTitle>
             </CardHeader>
-            <CardContent>
-              {step === 'phone' ? (
-                <form onSubmit={handleSendCode} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input
-                        id="firstName"
-                        value={formData.firstName}
-                        onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                        placeholder="John"
-                        data-testid="input-first-name"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input
-                        id="lastName"
-                        value={formData.lastName}
-                        onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                        placeholder="Smith"
-                        data-testid="input-last-name"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={formData.phoneNumber}
-                      onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
-                      placeholder="+1 (555) 123-4567"
-                      required
-                      data-testid="input-phone-number"
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={sendCodeMutation.isPending || !formData.phoneNumber}
-                    data-testid="button-send-code"
-                  >
-                    {sendCodeMutation.isPending ? 'Sending...' : 'Send Verification Code'}
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyCode} className="space-y-4">
-                  <div>
-                    <Label htmlFor="code">Verification Code</Label>
-                    <Input
-                      id="code"
-                      value={formData.code}
-                      onChange={(e) => setFormData({...formData, code: e.target.value})}
-                      placeholder="123456"
-                      maxLength={6}
-                      required
-                      data-testid="input-verification-code"
-                    />
-                    <p className="text-sm text-gray-600 mt-1">
-                      Enter the 6-digit code sent to {formData.phoneNumber}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setStep('phone')}
-                      className="flex-1"
-                      data-testid="button-back"
-                    >
-                      Back
-                    </Button>
-                    <Button 
-                      type="submit" 
-                      className="flex-1"
-                      disabled={verifyCodeMutation.isPending || formData.code.length !== 6}
-                      data-testid="button-verify-code"
-                    >
-                      {verifyCodeMutation.isPending ? 'Verifying...' : 'Verify & Login'}
-                    </Button>
-                  </div>
-                </form>
-              )}
+            <CardContent className="space-y-4">
+              <p className="text-gray-600 text-center mb-6">
+                Get instant help from licensed plumbers in your area through video calls.
+              </p>
+              
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm text-gray-700">Available 24/7 for emergencies</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm text-gray-700">Local plumbers in your area</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <MessageSquare className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm text-gray-700">Video chat for better diagnosis</span>
+                </div>
+              </div>
+
+              <Link href="/customer/login">
+                <Button className="w-full mt-6 bg-blue-600 hover:bg-blue-700" size="lg">
+                  Get Help Now
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+              
+              <p className="text-sm text-gray-500 text-center">
+                No registration required • Get help in minutes
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Plumber Option */}
+          <Card className="relative overflow-hidden border-2 hover:border-green-300 transition-all duration-300 transform hover:scale-105">
+            <CardHeader className="pb-4">
+              <div className="w-16 h-16 mx-auto bg-green-600 rounded-full flex items-center justify-center mb-4">
+                <Wrench className="w-8 h-8 text-white" />
+              </div>
+              <CardTitle className="text-2xl text-center">I'm a Plumber</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600 text-center mb-6">
+                Join our network and connect with customers who need your expertise.
+              </p>
+              
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <Shield className="w-5 h-5 text-green-600" />
+                  <span className="text-sm text-gray-700">SMS verification for security</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Star className="w-5 h-5 text-green-600" />
+                  <span className="text-sm text-gray-700">Build your reputation with ratings</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Users className="w-5 h-5 text-green-600" />
+                  <span className="text-sm text-gray-700">Complete CRM system included</span>
+                </div>
+              </div>
+
+              <Link href="/plumber/login">
+                <Button className="w-full mt-6 bg-green-600 hover:bg-green-700" size="lg">
+                  Join Network
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+              
+              <p className="text-sm text-gray-500 text-center">
+                Quick SMS verification • Start earning today
+              </p>
             </CardContent>
           </Card>
         </div>

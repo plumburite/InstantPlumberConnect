@@ -9,6 +9,8 @@ import { SMSProvider } from "@/hooks/use-sms";
 import { ProtectedRoute } from "./lib/protected-route";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
+import PlumberLogin from "@/pages/plumber-login";
+import CustomerLogin from "@/pages/customer-login";
 import PlumberDashboard from "@/pages/plumber-dashboard";
 import CrmDashboard from "@/pages/crm-dashboard";
 import StripeCheckout from "@/pages/stripe-checkout";
@@ -31,6 +33,8 @@ function Router() {
       )}
       <Route path="/auth" component={AuthPage} />
       <Route path="/signup" component={AuthPage} />
+      <Route path="/plumber/login" component={PlumberLogin} />
+      <Route path="/customer/login" component={CustomerLogin} />
       <Route path="/checkout" component={StripeCheckout} />
       <Route path="/payment-success" component={PaymentSuccess} />
       <Route component={NotFound} />
