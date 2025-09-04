@@ -56,13 +56,13 @@ function updateUserSession(
 
 async function upsertUser(
   claims: any,
-) {
-  await storage.upsertUser({
+): Promise<any> {
+  return await storage.upsertUser({
     id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
+    email: claims["email"] || null,
+    firstName: claims["first_name"] || null,
+    lastName: claims["last_name"] || null,
+    profileImageUrl: claims["profile_image_url"] || null,
   });
 }
 
@@ -78,16 +78,25 @@ export async function setupAuth(app: Express) {
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
-    const claims = tokens.claims();
-    const user = await upsertUser(claims);
-    const sessionUser = {
-      id: user.id,
-      claims: claims,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: claims.exp
-    };
-    verified(null, sessionUser);
+    try {
+      const claims = tokens.claims();
+      if (!claims) {
+        return verified(new Error("No claims found in token"));
+      }
+      
+      const user = await upsertUser(claims);
+      const sessionUser = {
+        id: user.id,
+        claims: claims,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: claims.exp || 0
+      };
+      verified(null, sessionUser);
+    } catch (error) {
+      console.error("Authentication error:", error);
+      verified(error);
+    }
   };
 
   for (const domain of process.env

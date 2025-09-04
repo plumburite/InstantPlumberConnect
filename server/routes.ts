@@ -60,15 +60,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create plumber profile for new user
         const user = await storage.getUser(userId);
         plumber = await storage.createPlumber({
-          id: userId,
           firstName: user?.firstName || "Unknown",
           lastName: user?.lastName || "Plumber",
           email: user?.email || "no-email@example.com",
           phoneNumber: "555-0000",
           company: "Self-Employed",
+          licenseNumber: "TEMP-" + Date.now(),
           serviceRadius: 25,
           isAvailable: Boolean(isAvailable),
-          location: null
+          userId: userId
         });
       } else {
         const updatedPlumber = await storage.updatePlumber(userId, {
@@ -321,11 +321,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add plumber signature to message
-      const plumber = req.user!;
+      const userId = req.user.claims.sub;
+      const plumber = await storage.getPlumber(userId);
       const fullMessage = `${message}
 
-- ${plumber.firstName} ${plumber.lastName}
-${plumber.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
+- ${plumber?.firstName || 'Unknown'} ${plumber?.lastName || 'Plumber'}
+${plumber?.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
 
       const success = await twilioService.sendSMS(customer.phoneNumber, fullMessage);
       
@@ -369,7 +370,8 @@ ${plumber.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
       }
 
       // Get plumber details
-      const plumber = req.user!;
+      const userId = req.user.claims.sub;
+      const plumber = await storage.getPlumber(userId);
       
       // Format appointment reminder message
       const reminderMessage = `🔧 APPOINTMENT REMINDER
@@ -382,9 +384,9 @@ This is a reminder about your upcoming plumbing appointment:
 🕐 Time: ${appointmentTime}
 ${serviceType ? `🔧 Service: ${serviceType}` : ''}
 
-Your plumber: ${plumber.firstName} ${plumber.lastName}
-${plumber.company ? `Company: ${plumber.company}` : ''}
-${plumber.phoneNumber ? `Phone: ${plumber.phoneNumber}` : ''}
+Your plumber: ${plumber?.firstName || 'Unknown'} ${plumber?.lastName || 'Plumber'}
+${plumber?.company ? `Company: ${plumber.company}` : ''}
+${plumber?.phoneNumber ? `Phone: ${plumber.phoneNumber}` : ''}
 
 Please let us know if you need to reschedule.
 
