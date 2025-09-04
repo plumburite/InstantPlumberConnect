@@ -11,10 +11,16 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  headers?: Record<string, string>,
 ): Promise<Response> {
+  const sessionId = localStorage.getItem("sessionId");
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data && { "Content-Type": "application/json" }),
+      ...(sessionId && { "X-Session-Id": sessionId }),
+      ...headers,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

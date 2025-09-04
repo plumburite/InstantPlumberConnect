@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+// Removed Replit Auth import
 import { storage } from "./storage";
 import { 
   insertCallSchema, insertCustomerSchema, insertServiceSchema, 
@@ -10,20 +10,146 @@ import { SocketServer } from "./socket-server";
 import { twilioService } from "./twilio-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication routes
-  await setupAuth(app);
+  // SMS Authentication storage
+  const authCodes = new Map<string, { code: string, expires: number, firstName?: string, lastName?: string }>();
+  const sessions = new Map<string, { phoneNumber: string, userId?: string }>();
 
-  // Auth routes for Replit Auth
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Simple session middleware
+  app.use((req: any, res, next) => {
+    const sessionId = req.headers['x-session-id'];
+    if (sessionId && sessions.has(sessionId)) {
+      req.user = sessions.get(sessionId);
+    }
+    next();
+  });
+
+  // SMS Authentication Routes
+  app.post("/api/auth/send-code", async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      const { phoneNumber, firstName, lastName } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+
+      // Generate 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+      authCodes.set(phoneNumber, { code, expires, firstName, lastName });
+
+      // Send SMS
+      const message = `Your Instant Plumber Connect verification code is: ${code}`;
+      const success = await twilioService.sendSMS(phoneNumber, message);
+
+      if (success) {
+        res.json({ message: "Verification code sent successfully" });
+      } else {
+        res.status(500).json({ message: "Failed to send verification code" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to send code" });
     }
   });
+
+  app.post("/api/auth/verify-code", async (req, res) => {
+    try {
+      const { phoneNumber, code } = req.body;
+      
+      if (!phoneNumber || !code) {
+        return res.status(400).json({ message: "Phone number and code are required" });
+      }
+
+      const authData = authCodes.get(phoneNumber);
+      if (!authData) {
+        return res.status(400).json({ message: "No verification code found" });
+      }
+
+      if (Date.now() > authData.expires) {
+        authCodes.delete(phoneNumber);
+        return res.status(400).json({ message: "Verification code expired" });
+      }
+
+      if (authData.code !== code) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      // Code is valid - create/get user and session
+      let user = await storage.getPlumberByPhone(phoneNumber);
+      if (!user) {
+        // Create new plumber
+        user = await storage.createPlumber({
+          firstName: authData.firstName || "Unknown",
+          lastName: authData.lastName || "Plumber", 
+          email: `${phoneNumber}@phone.local`,
+          phoneNumber: phoneNumber,
+          company: "Self-Employed",
+          licenseNumber: "TEMP-" + Date.now(),
+          serviceRadius: 25,
+          isAvailable: false
+        });
+      }
+
+      // Create session
+      const sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      sessions.set(sessionId, { phoneNumber, userId: user.id });
+
+      // Clear auth code
+      authCodes.delete(phoneNumber);
+
+      res.json({ 
+        sessionId, 
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phoneNumber: user.phoneNumber,
+          company: user.company
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to verify code" });
+    }
+  });
+
+  app.get("/api/auth/user", async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const user = await storage.getPlumberByPhone(req.user.phoneNumber);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+        company: user.company
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to get user" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req: any, res) => {
+    const sessionId = req.headers['x-session-id'];
+    if (sessionId) {
+      sessions.delete(sessionId);
+    }
+    res.json({ message: "Logged out successfully" });
+  });
+
+  // Auth middleware helper
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    next();
+  };
 
   // Create HTTP server first
   const httpServer = createServer(app);
@@ -49,10 +175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Plumber availability toggle
-  app.patch("/api/plumber/availability", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/plumber/availability", requireAuth, async (req: any, res) => {
     try {
       const { isAvailable } = req.body;
-      const userId = req.user.claims.sub;
+      const userId = req.user.userId;
       
       // Try to get plumber by user ID, create if doesn't exist
       let plumber = await storage.getPlumber(userId);
@@ -117,10 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get calls for authenticated plumber
-  app.get("/api/plumber/calls", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+  app.get("/api/plumber/calls", requireAuth, async (req, res) => {
 
     try {
       const calls = await storage.getCallsByPlumber(req.user!.id);
@@ -132,9 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Accept a call (plumber side)
   app.patch("/api/calls/:id/accept", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
 
     try {
       const call = await storage.getCall(req.params.id);
@@ -159,9 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // FCM Token registration endpoint
   app.post("/api/plumber/fcm-token", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
 
     try {
       const { token } = req.body;
@@ -263,10 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============ SMS API ENDPOINTS ============
 
   // Send general SMS message
-  app.post("/api/sms/send", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+  app.post("/api/sms/send", requireAuth, async (req, res) => {
 
     try {
       const { phoneNumber, message } = req.body;
@@ -298,10 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send SMS to customer
-  app.post("/api/sms/send-to-customer", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+  app.post("/api/sms/send-to-customer", requireAuth, async (req, res) => {
 
     try {
       const { customerId, message, messageType } = req.body;
@@ -321,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add plumber signature to message
-      const userId = req.user.claims.sub;
+      const userId = req.user.userId;
       const plumber = await storage.getPlumber(userId);
       const fullMessage = `${message}
 
@@ -347,10 +460,7 @@ ${plumber?.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
   });
 
   // Send appointment reminder SMS
-  app.post("/api/sms/appointment-reminder", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+  app.post("/api/sms/appointment-reminder", requireAuth, async (req, res) => {
 
     try {
       const { customerId, appointmentDate, appointmentTime, serviceType } = req.body;
@@ -370,7 +480,7 @@ ${plumber?.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
       }
 
       // Get plumber details
-      const userId = req.user.claims.sub;
+      const userId = req.user.userId;
       const plumber = await storage.getPlumber(userId);
       
       // Format appointment reminder message
@@ -412,10 +522,7 @@ Please let us know if you need to reschedule.
   });
 
   // Get SMS service status
-  app.get("/api/sms/status", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+  app.get("/api/sms/status", requireAuth, async (req, res) => {
 
     try {
       const isReady = twilioService.isReady();
@@ -432,9 +539,7 @@ Please let us know if you need to reschedule.
 
   // Customer Management
   app.get("/api/customers", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const customers = await storage.getAllCustomers();
       res.json(customers);
@@ -444,9 +549,7 @@ Please let us know if you need to reschedule.
   });
 
   app.get("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const customer = await storage.getCustomer(req.params.id);
       if (!customer) {
@@ -459,9 +562,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/customers", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(validatedData);
@@ -472,9 +573,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const customer = await storage.updateCustomer(req.params.id, req.body);
       if (!customer) {
@@ -487,9 +586,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteCustomer(req.params.id);
       if (!deleted) {
@@ -502,9 +599,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/customers/:id/membership", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const { status, expiry } = req.body;
       const customer = await storage.updateCustomerMembership(
@@ -523,9 +618,7 @@ Please let us know if you need to reschedule.
 
   // Service Management
   app.get("/api/services", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const services = await storage.getAllServices();
       res.json(services);
@@ -544,9 +637,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/services", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertServiceSchema.parse(req.body);
       const service = await storage.createService(validatedData);
@@ -557,9 +648,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/services/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const service = await storage.updateService(req.params.id, req.body);
       if (!service) {
@@ -572,9 +661,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/services/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteService(req.params.id);
       if (!deleted) {
@@ -588,9 +675,7 @@ Please let us know if you need to reschedule.
 
   // Inventory Management
   app.get("/api/inventory", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const inventory = await storage.getAllInventory();
       res.json(inventory);
@@ -600,9 +685,7 @@ Please let us know if you need to reschedule.
   });
 
   app.get("/api/inventory/low-stock", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const lowStockItems = await storage.getLowStockItems();
       res.json(lowStockItems);
@@ -612,9 +695,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/inventory", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertInventorySchema.parse(req.body);
       const item = await storage.createInventoryItem(validatedData);
@@ -625,9 +706,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/inventory/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const item = await storage.updateInventoryItem(req.params.id, req.body);
       if (!item) {
@@ -640,9 +719,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/inventory/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteInventoryItem(req.params.id);
       if (!deleted) {
@@ -656,9 +733,7 @@ Please let us know if you need to reschedule.
 
   // Invoice Management
   app.get("/api/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const invoices = await storage.getAllInvoices();
       res.json(invoices);
@@ -668,9 +743,7 @@ Please let us know if you need to reschedule.
   });
 
   app.get("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const invoice = await storage.getInvoice(req.params.id);
       if (!invoice) {
@@ -684,9 +757,7 @@ Please let us know if you need to reschedule.
   });
 
   app.get("/api/customers/:id/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const invoices = await storage.getInvoicesByCustomer(req.params.id);
       res.json(invoices);
@@ -696,9 +767,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertInvoiceSchema.parse(req.body);
       const invoice = await storage.createInvoice(validatedData);
@@ -709,9 +778,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const invoice = await storage.updateInvoice(req.params.id, req.body);
       if (!invoice) {
@@ -724,9 +791,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteInvoice(req.params.id);
       if (!deleted) {
@@ -740,9 +805,7 @@ Please let us know if you need to reschedule.
 
   // Invoice Items Management
   app.get("/api/invoices/:id/items", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const items = await storage.getInvoiceItems(req.params.id);
       res.json(items);
@@ -752,9 +815,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/invoices/:id/items", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertInvoiceItemSchema.parse({
         ...req.body,
@@ -768,9 +829,7 @@ Please let us know if you need to reschedule.
   });
 
   app.patch("/api/invoice-items/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const item = await storage.updateInvoiceItem(req.params.id, req.body);
       if (!item) {
@@ -783,9 +842,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/invoice-items/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteInvoiceItem(req.params.id);
       if (!deleted) {
@@ -799,9 +856,7 @@ Please let us know if you need to reschedule.
 
   // File Management
   app.get("/api/files/customer/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const files = await storage.getFilesByCustomer(req.params.id);
       res.json(files);
@@ -811,9 +866,7 @@ Please let us know if you need to reschedule.
   });
 
   app.get("/api/files/call/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const files = await storage.getFilesByCall(req.params.id);
       res.json(files);
@@ -823,9 +876,7 @@ Please let us know if you need to reschedule.
   });
 
   app.post("/api/files", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const validatedData = insertFileSchema.parse({
         ...req.body,
@@ -839,9 +890,7 @@ Please let us know if you need to reschedule.
   });
 
   app.delete("/api/files/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    // Auth check handled by requireAuth middleware
     try {
       const deleted = await storage.deleteFile(req.params.id);
       if (!deleted) {

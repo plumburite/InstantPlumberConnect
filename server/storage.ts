@@ -23,6 +23,7 @@ export interface IStorage {
   // Plumber management
   getPlumber(id: string): Promise<Plumber | undefined>;
   getPlumberByEmail(email: string): Promise<Plumber | undefined>;
+  getPlumberByPhone(phoneNumber: string): Promise<Plumber | undefined>;
   createPlumber(plumber: InsertPlumber): Promise<Plumber>;
   updatePlumber(id: string, updates: Partial<Plumber>): Promise<Plumber | undefined>;
   getAvailablePlumbers(): Promise<Plumber[]>;
