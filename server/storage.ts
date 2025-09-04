@@ -83,11 +83,6 @@ export interface IStorage {
   getFilesByInvoice(invoiceId: string): Promise<File[]>;
   deleteFile(id: string): Promise<boolean>;
   
-  // Legacy user methods for auth compatibility
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
   // Enhanced methods for geolocation and advanced features
   getNearbyPlumbers?(lat: number, lng: number, maxDistance?: number): Promise<Plumber[]>;
   updatePlumberLocation?(id: string, lat: number, lng: number): Promise<void>;
@@ -112,6 +107,7 @@ export class MemStorage implements IStorage {
   public sessionStore: session.Store;
 
   constructor() {
+    this.users = new Map();
     this.plumbers = new Map();
     this.calls = new Map();
     this.customers = new Map();

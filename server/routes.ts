@@ -49,24 +49,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Plumber availability toggle
-  app.patch("/api/plumber/availability", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
+  app.patch("/api/plumber/availability", isAuthenticated, async (req: any, res) => {
     try {
       const { isAvailable } = req.body;
-      const updatedPlumber = await storage.updatePlumber(req.user!.id, {
-        isAvailable: Boolean(isAvailable),
-      });
-
-      if (!updatedPlumber) {
-        return res.status(404).json({ message: "Plumber not found" });
+      const userId = req.user.claims.sub;
+      
+      // Try to get plumber by user ID, create if doesn't exist
+      let plumber = await storage.getPlumber(userId);
+      if (!plumber) {
+        // Create plumber profile for new user
+        const user = await storage.getUser(userId);
+        plumber = await storage.createPlumber({
+          id: userId,
+          firstName: user?.firstName || "Unknown",
+          lastName: user?.lastName || "Plumber",
+          email: user?.email || "no-email@example.com",
+          phoneNumber: "555-0000",
+          company: "Self-Employed",
+          serviceRadius: 25,
+          isAvailable: Boolean(isAvailable),
+          location: null
+        });
+      } else {
+        const updatedPlumber = await storage.updatePlumber(userId, {
+          isAvailable: Boolean(isAvailable),
+        });
+        plumber = updatedPlumber || plumber;
       }
 
       res.json({
-        id: updatedPlumber.id,
-        isAvailable: updatedPlumber.isAvailable,
+        id: plumber.id,
+        isAvailable: plumber.isAvailable,
       });
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Failed to update availability" });
