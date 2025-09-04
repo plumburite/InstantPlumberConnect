@@ -3,7 +3,7 @@ import { pgTable, text, varchar, boolean, integer, timestamp, decimal, json, ind
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Session storage table for Replit Auth
+// Session storage table
 export const sessions = pgTable(
   "sessions",
   {
@@ -14,26 +14,14 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table for Replit Auth
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 export const plumbers = pgTable("plumbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
   email: text("email").notNull().unique(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   company: text("company").notNull(),
   licenseNumber: text("license_number").notNull(),
-  phoneNumber: text("phone_number").notNull(),
+  phoneNumber: text("phone_number").notNull().unique(),
   serviceRadius: integer("service_radius").notNull().default(25),
   isAvailable: boolean("is_available").notNull().default(false),
   rating: text("rating").default("4.9"),

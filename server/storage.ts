@@ -1,9 +1,9 @@
 import { 
-  type Plumber, type InsertPlumber, type Call, type InsertCall, type User, type UpsertUser,
+  type Plumber, type InsertPlumber, type Call, type InsertCall,
   type Customer, type InsertCustomer, type Service, type InsertService,
   type Inventory, type InsertInventory, type Invoice, type InsertInvoice,
   type InvoiceItem, type InsertInvoiceItem, type File, type InsertFile,
-  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files, users
+  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
@@ -16,9 +16,6 @@ import connectPgSimple from "connect-pg-simple";
 const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
-  // User operations for Replit Auth
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
 
   // Plumber management
   getPlumber(id: string): Promise<Plumber | undefined>;
