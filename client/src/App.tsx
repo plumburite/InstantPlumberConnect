@@ -30,6 +30,7 @@ function Router() {
         </>
       )}
       <Route path="/auth" component={AuthPage} />
+      <Route path="/signup" component={AuthPage} />
       <Route path="/checkout" component={StripeCheckout} />
       <Route path="/payment-success" component={PaymentSuccess} />
       <Route component={NotFound} />

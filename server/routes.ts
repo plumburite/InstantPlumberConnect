@@ -32,6 +32,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Phone number is required" });
       }
 
+      // Check if Twilio service is ready
+      if (!twilioService.isReady()) {
+        console.error("❌ Twilio service not initialized");
+        return res.status(500).json({ message: "SMS service unavailable - please check Twilio credentials" });
+      }
+
+      // Format phone number (ensure it starts with +)
+      let formattedPhone = phoneNumber.trim();
+      if (!formattedPhone.startsWith('+')) {
+        // Assume US number if no country code
+        formattedPhone = '+1' + formattedPhone.replace(/[^\d]/g, '');
+      }
+
+      console.log(`📞 Sending verification code to: ${formattedPhone}`);
+
       // Generate 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
@@ -40,14 +55,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send SMS
       const message = `Your Instant Plumber Connect verification code is: ${code}`;
-      const success = await twilioService.sendSMS(phoneNumber, message);
+      const success = await twilioService.sendSMS(formattedPhone, message);
 
       if (success) {
+        console.log(`✅ Verification code sent successfully to ${formattedPhone}`);
         res.json({ message: "Verification code sent successfully" });
       } else {
-        res.status(500).json({ message: "Failed to send verification code" });
+        console.error(`❌ SMS service returned false for ${formattedPhone}`);
+        res.status(500).json({ message: "Failed to send verification code - please check your phone number" });
       }
     } catch (error: any) {
+      console.error("❌ Send code error:", error);
       res.status(500).json({ message: error.message || "Failed to send code" });
     }
   });
