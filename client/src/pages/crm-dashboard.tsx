@@ -16,10 +16,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Users, Package, FileText, Settings, Plus, Edit, Trash2, DollarSign, 
-  AlertTriangle, Calendar, Search, Phone, Mail, MapPin, Receipt, FolderOpen, Upload, Download
+  AlertTriangle, Calendar, Search, Phone, Mail, MapPin, Receipt, FolderOpen, Upload, Download, MessageSquare
 } from "lucide-react";
 import { format } from "date-fns";
 import InvoiceDetail from "@/components/invoice-detail";
+import SMSManager from "@/components/sms-manager";
 import type { Customer, Service, Inventory, Invoice, File } from "@shared/schema";
 
 export default function CrmDashboard() {
@@ -501,7 +502,7 @@ export default function CrmDashboard() {
 
         {/* CRM Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="customers" className="flex items-center space-x-2" data-testid="tab-customers">
               <Users className="w-4 h-4" />
               <span>Customers</span>
@@ -521,6 +522,10 @@ export default function CrmDashboard() {
             <TabsTrigger value="files" className="flex items-center space-x-2" data-testid="tab-files">
               <FolderOpen className="w-4 h-4" />
               <span>Files</span>
+            </TabsTrigger>
+            <TabsTrigger value="sms" className="flex items-center space-x-2" data-testid="tab-sms">
+              <MessageSquare className="w-4 h-4" />
+              <span>SMS</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1402,6 +1407,14 @@ export default function CrmDashboard() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* SMS Tab */}
+          <TabsContent value="sms" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold">SMS Management</h2>
+            </div>
+            <SMSManager />
           </TabsContent>
         </Tabs>
       </main>

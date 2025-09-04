@@ -7,6 +7,7 @@ import {
   insertInventorySchema, insertInvoiceSchema, insertInvoiceItemSchema, insertFileSchema 
 } from "@shared/schema";
 import { SocketServer } from "./socket-server";
+import { twilioService } from "./twilio-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -232,6 +233,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     res.json({ received: true });
+  });
+
+  // ============ SMS API ENDPOINTS ============
+
+  // Send general SMS message
+  app.post("/api/sms/send", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    try {
+      const { phoneNumber, message } = req.body;
+      
+      if (!phoneNumber || !message) {
+        return res.status(400).json({ message: "Phone number and message are required" });
+      }
+
+      // Validate phone number format (basic validation)
+      const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+      if (!phoneRegex.test(phoneNumber.replace(/[-\s\(\)]/g, ''))) {
+        return res.status(400).json({ message: "Invalid phone number format" });
+      }
+
+      const success = await twilioService.sendSMS(phoneNumber, message);
+      
+      if (success) {
+        res.json({ 
+          message: "SMS sent successfully",
+          phoneNumber: phoneNumber,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({ message: "Failed to send SMS" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to send SMS" });
+    }
+  });
+
+  // Send SMS to customer
+  app.post("/api/sms/send-to-customer", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    try {
+      const { customerId, message, messageType } = req.body;
+      
+      if (!customerId || !message) {
+        return res.status(400).json({ message: "Customer ID and message are required" });
+      }
+
+      // Get customer details
+      const customer = await storage.getCustomer(customerId);
+      if (!customer) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+
+      if (!customer.phoneNumber) {
+        return res.status(400).json({ message: "Customer has no phone number on file" });
+      }
+
+      // Add plumber signature to message
+      const plumber = req.user!;
+      const fullMessage = `${message}
+
+- ${plumber.firstName} ${plumber.lastName}
+${plumber.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
+
+      const success = await twilioService.sendSMS(customer.phoneNumber, fullMessage);
+      
+      if (success) {
+        res.json({ 
+          message: "SMS sent to customer successfully",
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          phoneNumber: customer.phoneNumber,
+          messageType: messageType || 'general',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({ message: "Failed to send SMS to customer" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to send SMS to customer" });
+    }
+  });
+
+  // Send appointment reminder SMS
+  app.post("/api/sms/appointment-reminder", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    try {
+      const { customerId, appointmentDate, appointmentTime, serviceType } = req.body;
+      
+      if (!customerId || !appointmentDate || !appointmentTime) {
+        return res.status(400).json({ message: "Customer ID, appointment date, and time are required" });
+      }
+
+      // Get customer details
+      const customer = await storage.getCustomer(customerId);
+      if (!customer) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+
+      if (!customer.phoneNumber) {
+        return res.status(400).json({ message: "Customer has no phone number on file" });
+      }
+
+      // Get plumber details
+      const plumber = req.user!;
+      
+      // Format appointment reminder message
+      const reminderMessage = `🔧 APPOINTMENT REMINDER
+
+Hi ${customer.firstName},
+
+This is a reminder about your upcoming plumbing appointment:
+
+📅 Date: ${appointmentDate}
+🕐 Time: ${appointmentTime}
+${serviceType ? `🔧 Service: ${serviceType}` : ''}
+
+Your plumber: ${plumber.firstName} ${plumber.lastName}
+${plumber.company ? `Company: ${plumber.company}` : ''}
+${plumber.phoneNumber ? `Phone: ${plumber.phoneNumber}` : ''}
+
+Please let us know if you need to reschedule.
+
+- Instant Plumber Connect`;
+
+      const success = await twilioService.sendSMS(customer.phoneNumber, reminderMessage);
+      
+      if (success) {
+        res.json({ 
+          message: "Appointment reminder sent successfully",
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          phoneNumber: customer.phoneNumber,
+          appointmentDate,
+          appointmentTime,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({ message: "Failed to send appointment reminder" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to send appointment reminder" });
+    }
+  });
+
+  // Get SMS service status
+  app.get("/api/sms/status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    try {
+      const isReady = twilioService.isReady();
+      res.json({ 
+        smsServiceAvailable: isReady,
+        message: isReady ? "SMS service is ready" : "SMS service not configured"
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to check SMS status" });
+    }
   });
 
   // ============ CRM API ENDPOINTS ============
