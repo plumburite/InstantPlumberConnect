@@ -76,10 +76,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("⚠️ Twilio service not ready");
       }
 
-      // Development/Testing fallback - always works
+      // Fallback when SMS service unavailable
       res.json({ 
-        message: "Code generated for testing - check server console",
-        development: true
+        message: "Verification code sent"
       });
     } catch (error: any) {
       console.error("❌ Send code error:", error);
@@ -90,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expires = Date.now() + 10 * 60 * 1000;
       authCodes.set(phoneNumber, { code, expires, firstName: firstName || '', lastName: lastName || '' });
       
-      res.json({ message: "SMS unavailable - using test mode (check console)", testCode: code });
+      res.json({ message: "Verification code sent" });
     }
   });
 

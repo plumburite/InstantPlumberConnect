@@ -52,7 +52,7 @@ export class SocketServer {
 
   private setupSocketHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`🔌 Client connected: ${socket.id}`);
+      // Client connected
 
       // Handle user connection identification
       socket.on('identify', (data: { userType: 'customer' | 'plumber'; userId?: string; location?: { lat: number; lng: number } }) => {
@@ -63,7 +63,7 @@ export class SocketServer {
           location: data.location,
         });
 
-        console.log(`👤 User identified: ${data.userType} - ${socket.id}`);
+        // User identified
 
         // If plumber, join plumber room
         if (data.userType === 'plumber' && data.userId) {
@@ -84,7 +84,7 @@ export class SocketServer {
         location: { lat: number; lng: number };
       }) => {
         try {
-          console.log('📞 Customer initiating call:', data);
+          // Customer initiating call
 
           // Create call session
           const callSession: CallSession = {
@@ -232,7 +232,7 @@ export class SocketServer {
 
       // WebRTC Signaling
       socket.on('webrtc_offer', (data: { callId: string; offer: RTCSessionDescriptionInit; to: string }) => {
-        console.log('📡 WebRTC offer received');
+        // WebRTC offer received
         socket.to(data.to).emit('webrtc_offer', {
           callId: data.callId,
           offer: data.offer,
@@ -241,7 +241,7 @@ export class SocketServer {
       });
 
       socket.on('webrtc_answer', (data: { callId: string; answer: RTCSessionDescriptionInit; to: string }) => {
-        console.log('📡 WebRTC answer received');
+        // WebRTC answer received
         socket.to(data.to).emit('webrtc_answer', {
           callId: data.callId,
           answer: data.answer,
@@ -263,7 +263,7 @@ export class SocketServer {
           const call = this.activeCalls.get(data.callId);
           if (!call) return;
 
-          console.log(`📞 Call ended: ${data.callId}`);
+          // Call ended
 
           // Update call status
           call.status = 'ended';
@@ -306,7 +306,7 @@ export class SocketServer {
               user.location = data.location;
             }
 
-            console.log(`🔄 Plumber ${user.userId} availability updated: ${data.isAvailable}`);
+            // Plumber availability updated
           } catch (error) {
             console.error('Error updating availability:', error);
           }
@@ -328,7 +328,7 @@ export class SocketServer {
 
       // Handle disconnect
       socket.on('disconnect', () => {
-        console.log(`🔌 Client disconnected: ${socket.id}`);
+        // Client disconnected
         
         // Clean up active calls
         for (const [callId, call] of Array.from(this.activeCalls.entries())) {
