@@ -15,10 +15,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const sessions = new Map<string, { phoneNumber: string, userId?: string }>();
 
   // Simple session middleware
-  app.use((req: any, res, next) => {
+  app.use(async (req: any, res, next) => {
     const sessionId = req.headers['x-session-id'];
     if (sessionId && sessions.has(sessionId)) {
-      req.user = sessions.get(sessionId);
+      const sessionData = sessions.get(sessionId);
+      if (sessionData?.userId) {
+        // Get full plumber data for authenticated requests
+        const plumber = await storage.getPlumber(sessionData.userId);
+        if (plumber) {
+          req.user = {
+            id: plumber.id,
+            phoneNumber: plumber.phoneNumber,
+            userId: plumber.id,
+            ...plumber
+          };
+        }
+      }
     }
     next();
   });
@@ -70,10 +82,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
         } catch (smsError: any) {
-          console.error(`❌ SMS sending failed:`, smsError);
+          // SMS send failed - handled gracefully
         }
       } else {
-        console.warn("⚠️ Twilio service not ready");
+        // Twilio not ready - handled gracefully
       }
 
       // Fallback when SMS service unavailable
@@ -81,7 +93,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Verification code sent"
       });
     } catch (error: any) {
-      console.error("❌ Send code error:", error);
       
       // Still generate code for testing even if SMS fails
       const { phoneNumber, firstName, lastName } = req.body;
@@ -148,7 +159,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: user.firstName,
           lastName: user.lastName,
           phoneNumber: user.phoneNumber,
-          company: user.company
+          company: user.company,
+          isAvailable: user.isAvailable
         }
       });
     } catch (error: any) {
