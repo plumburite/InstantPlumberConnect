@@ -387,7 +387,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add plumber signature to message
-      const userId = req.user.userId;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const plumber = await storage.getPlumber(userId);
       const fullMessage = `${message}
 
@@ -433,7 +436,10 @@ ${plumber?.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
       }
 
       // Get plumber details
-      const userId = req.user.userId;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const plumber = await storage.getPlumber(userId);
       
       // Format appointment reminder message
