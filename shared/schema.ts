@@ -17,6 +17,7 @@ export const sessions = pgTable(
 export const plumbers = pgTable("plumbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  password: text("password").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   company: text("company").notNull(),
@@ -282,3 +283,4 @@ export type File = typeof files.$inferSelect;
 
 // User type is now Plumber
 export type User = typeof plumbers.$inferSelect;
+export type InsertUser = InsertPlumber;
