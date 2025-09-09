@@ -25,7 +25,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (plumber) {
           req.user = {
             id: plumber.id,
-            phoneNumber: plumber.phoneNumber,
             userId: plumber.id,
             ...plumber
           };
@@ -137,6 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: authData.firstName || "Unknown",
           lastName: authData.lastName || "Plumber", 
           email: `${phoneNumber}@phone.local`,
+          password: "sms-auth",
           phoneNumber: phoneNumber,
           company: "Self-Employed",
           licenseNumber: "TEMP-" + Date.now(),
@@ -233,6 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: user?.firstName || "Unknown",
           lastName: user?.lastName || "Plumber",
           email: user?.email || "no-email@example.com",
+          password: "auto-generated",
           phoneNumber: "555-0000",
           company: "Self-Employed",
           licenseNumber: "TEMP-" + Date.now(),
