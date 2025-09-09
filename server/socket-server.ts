@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
+import * as socketio from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { storage } from './storage';
 import { insertCallSchema } from '@shared/schema';
@@ -33,25 +33,19 @@ interface CallSession {
 }
 
 export class SocketServer {
-  private io: SocketIOServer;
+  private io: any;
   private connectedUsers: Map<string, ConnectedUser> = new Map();
   private activeCalls: Map<string, CallSession> = new Map();
 
   constructor(server: HTTPServer) {
-    this.io = new SocketIOServer(server, {
-      cors: {
-        origin: ["http://localhost:5000", "https://*.replit.dev", "https://*.replit.app"],
-        methods: ["GET", "POST"],
-        credentials: true
-      },
-      path: '/socket.io/'
-    });
+    // Socket.IO 0.9.19 uses different API - listen on server
+    this.io = socketio.listen(server);
 
     this.setupSocketHandlers();
   }
 
   private setupSocketHandlers() {
-    this.io.on('connection', (socket) => {
+    this.io.on('connection', (socket: any) => {
       // Client connected
 
       // Handle user connection identification

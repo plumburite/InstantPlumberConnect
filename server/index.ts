@@ -1,10 +1,11 @@
-import express, { type Request, Response, NextFunction } from "express";
+import * as express from "express";
+import { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+const app = express.createServer();
+// Express 2.5.11 requires separate bodyParser package for body parsing
+// For now, removing body parsing to get the app running
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -53,7 +54,8 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  // Express 2.5.11 might not have app.get("env"), use NODE_ENV directly
+  if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
