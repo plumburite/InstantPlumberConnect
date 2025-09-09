@@ -67,9 +67,12 @@ export class FCMService {
 
       // Check if user has FCM token (method might not exist in MemStorage)
       let fcmToken = null;
-      // This is a placeholder - in production, you'd store FCM tokens in the database
-      const userWithToken = await storage.getPlumber(userId) as any;
-      fcmToken = userWithToken?.fcmToken;
+      if ('searchPlumbers' in storage && storage.searchPlumbers) {
+        // This is a bit of a hack - we need a better way to get FCM token
+        // In a real implementation, we'd add a proper method to the storage interface
+        const userWithToken = await storage.getPlumber(userId) as any;
+        fcmToken = userWithToken?.fcmToken;
+      }
 
       if (!fcmToken) {
         console.log(`❌ No FCM token found for user ${userId}`);

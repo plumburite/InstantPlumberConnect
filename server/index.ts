@@ -1,106 +1,74 @@
-import * as express from "express";
+import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-// Express 2.5.11 uses createServer() instead of express()
-const app = express.createServer();
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Simple logging middleware for Express 2.5.11
-app.use((req: any, res: any, next: any) => {
+app.use((req, res, next) => {
   const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (req.url && req.url.startsWith("/api")) {
-      log(`${req.method} ${req.url} ${res.statusCode} in ${duration}ms`);
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
+      log(logLine);
     }
   });
+
   next();
 });
 
-// Simple JSON response helper for Express 2.5.11
-app.use((req: any, res: any, next: any) => {
-  if (!res.json) {
-    res.json = function(obj: any) {
-      res.writeHead(res.statusCode || 200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(obj));
-    };
-  }
-  next();
-});
+(async () => {
+  const server = await registerRoutes(app);
 
-// Simple route setup without async wrapper  
-import { storage } from "./storage";
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
 
-// Basic test route
-app.get("/api/health", (req: any, res: any) => {
-  res.json({ status: "ok", message: "Server is running" });
-});
-
-// Serve client files (React source)
-import * as fs from "fs";
-import * as path from "path";
-
-app.get("/src/*", (req: any, res: any) => {
-  const filePath = path.join(process.cwd(), "client", req.url);
-  if (fs.existsSync(filePath)) {
-    const ext = path.extname(filePath);
-    let contentType = 'text/plain';
-    
-    if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') {
-      contentType = 'application/javascript';
-    } else if (ext === '.css') {
-      contentType = 'text/css';
-    } else if (ext === '.json') {
-      contentType = 'application/json';
+    // Only send response if headers haven't been sent already
+    if (!res.headersSent) {
+      res.status(status).json({ message });
     }
-    
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(fs.readFileSync(filePath, 'utf8'));
+    console.error('Server error:', err);
+  });
+
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
   } else {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('File not found');
+    serveStatic(app);
   }
-});
 
-// Serve the main HTML file for all non-API routes
-app.get("*", (req: any, res: any) => {
-  if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
-    const indexPath = path.join(process.cwd(), "client", "index.html");
-    if (fs.existsSync(indexPath)) {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(fs.readFileSync(indexPath, 'utf8'));
-    } else {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(`
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Instant Plumber Connect</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-      `);
-    }
-  } else {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ message: "API endpoint not found" }));
-  }
-});
-
-// Error handling middleware
-app.use((err: any, req: any, res: any, next: any) => {
-  console.error('Server error:', err);
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  res.json({ message });
-});
-
-// Start server
-const port = parseInt(process.env.PORT || '5000', 10);
-app.listen(port, "0.0.0.0", () => {
-  log(`serving on port ${port}`);
-});
+  // ALWAYS serve the app on the port specified in the environment variable PORT
+  // Other ports are firewalled. Default to 5000 if not specified.
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  const port = parseInt(process.env.PORT || '5000', 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();

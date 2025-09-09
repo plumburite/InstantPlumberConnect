@@ -1,10 +1,10 @@
 import { createContext, ReactNode, useContext, useEffect, useState, useCallback } from "react";
-import io from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import { useAuth } from './use-auth';
 import { useToast } from './use-toast';
 
 interface SocketContextType {
-  socket: any | null;
+  socket: Socket | null;
   isConnected: boolean;
   activeCalls: Map<string, any>;
   initiateCall: (data: {
@@ -22,7 +22,7 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const [socket, setSocket] = useState<any | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [activeCalls, setActiveCalls] = useState<Map<string, any>>(new Map());
   const { user } = useAuth();
@@ -65,14 +65,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     // Call event handlers
-    newSocket.on('call_searching', (data: any) => {
+    newSocket.on('call_searching', (data) => {
       toast({
         title: "Finding plumber...",
         description: "We're connecting you with the nearest available plumber.",
       });
     });
 
-    newSocket.on('call_accepted', (data: any) => {
+    newSocket.on('call_accepted', (data) => {
       console.log('✅ Call accepted by plumber:', data);
       toast({
         title: "Plumber found!",
@@ -91,7 +91,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_failed', (data: any) => {
+    newSocket.on('call_failed', (data) => {
       toast({
         title: "Call failed",
         description: data.reason,
@@ -99,7 +99,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_timeout', (data: any) => {
+    newSocket.on('call_timeout', (data) => {
       toast({
         title: "Call timeout",
         description: data.reason,
@@ -107,7 +107,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('incoming_call', (data: any) => {
+    newSocket.on('incoming_call', (data) => {
       toast({
         title: "Incoming Call",
         description: `Customer: ${data.customerName} - Issue: ${data.issueDescription}`,
@@ -120,7 +120,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_taken', (data: any) => {
+    newSocket.on('call_taken', (data) => {
       setActiveCalls(prev => {
         const updated = new Map(prev);
         updated.delete(data.callId);
@@ -128,7 +128,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_ended', (data: any) => {
+    newSocket.on('call_ended', (data) => {
       toast({
         title: "Call ended",
         description: data.reason || "The call has been ended.",
@@ -141,7 +141,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_accept_success', (data: any) => {
+    newSocket.on('call_accept_success', (data) => {
       console.log('✅ Successfully accepted call:', data);
       toast({
         title: "Call accepted",
@@ -160,7 +160,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    newSocket.on('call_accept_failed', (data: any) => {
+    newSocket.on('call_accept_failed', (data) => {
       toast({
         title: "Failed to accept",
         description: data.reason,
