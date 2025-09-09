@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
+import { Server } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { storage } from './storage';
 import { insertCallSchema } from '@shared/schema';
@@ -33,12 +33,12 @@ interface CallSession {
 }
 
 export class SocketServer {
-  private io: SocketIOServer;
+  private io: Server;
   private connectedUsers: Map<string, ConnectedUser> = new Map();
   private activeCalls: Map<string, CallSession> = new Map();
 
   constructor(server: HTTPServer) {
-    this.io = new SocketIOServer(server, {
+    this.io = new Server(server, {
       cors: {
         origin: ["http://localhost:5000", "https://*.replit.dev", "https://*.replit.app"],
         methods: ["GET", "POST"],
