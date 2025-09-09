@@ -11,7 +11,7 @@ interface UseWebRTCProps {
 interface WebRTCState {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
-  peer: SimplePeer.Instance | null;
+  peer: any | null;
   isConnected: boolean;
   isLoading: boolean;
   error: string | null;
