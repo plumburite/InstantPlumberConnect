@@ -135,7 +135,7 @@ class NotificationService {
 
     // Show browser notification
     const notification = this.showBrowserNotification(
-      '🔧 New Plumbing Call!',
+      'New Plumbing Call!',
       {
         body: `${customerName} needs help: ${issue}`,
         icon: '/favicon.ico',

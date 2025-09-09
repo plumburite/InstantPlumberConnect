@@ -7,6 +7,7 @@ Instant Plumber Connect is a full-stack web application that connects customers 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Code style: No emoji characters in code (console logs, messages, comments, etc.).
 
 ## System Architecture
 

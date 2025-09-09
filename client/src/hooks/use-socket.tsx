@@ -41,7 +41,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     // Connection handlers
     newSocket.on('connect', () => {
-      console.log('🔌 Connected to Socket.IO server');
+      console.log('Connected to Socket.IO server');
       setIsConnected(true);
       
       // Identify user type and info
@@ -60,7 +60,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     newSocket.on('disconnect', () => {
-      console.log('🔌 Disconnected from Socket.IO server');
+      console.log('Disconnected from Socket.IO server');
       setIsConnected(false);
     });
 
@@ -73,7 +73,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     newSocket.on('call_accepted', (data) => {
-      console.log('✅ Call accepted by plumber:', data);
+      console.log('Call accepted by plumber:', data);
       toast({
         title: "Plumber found!",
         description: `${data.plumber.firstName} ${data.plumber.lastName} has accepted your call.`,
@@ -142,7 +142,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     newSocket.on('call_accept_success', (data) => {
-      console.log('✅ Successfully accepted call:', data);
+      console.log('Successfully accepted call:', data);
       toast({
         title: "Call accepted",
         description: `You've accepted the call from ${data.customerInfo.name}.`,

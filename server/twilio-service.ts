@@ -22,22 +22,22 @@ class TwilioService {
       const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
       if (!accountSid || !authToken || !fromNumber) {
-        console.warn('⚠️ Twilio not initialized - missing credentials');
+        console.warn('Warning: Twilio not initialized - missing credentials');
         return;
       }
 
       this.client = twilio(accountSid, authToken);
       this.fromNumber = fromNumber;
       this.isInitialized = true;
-      console.log('✅ Twilio SMS service initialized');
+      console.log('Twilio SMS service initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize Twilio:', error);
+      console.error('Failed to initialize Twilio:', error);
     }
   }
 
   async sendSMS(to: string, message: string): Promise<boolean> {
     if (!this.isInitialized) {
-      console.warn('⚠️ Twilio not initialized, cannot send SMS');
+      console.warn('Warning: Twilio not initialized, cannot send SMS');
       return false;
     }
 
@@ -55,7 +55,7 @@ class TwilioService {
       // SMS sent successfully
       return true;
     } catch (error: any) {
-      console.error(`❌ Failed to send SMS to ${to}:`, error.message);
+      console.error(`Failed to send SMS to ${to}:`, error.message);
       
       // Handle trial account limitations gracefully
       if (error.code === 20003 || error.message?.includes('Authenticate')) {
@@ -65,7 +65,7 @@ class TwilioService {
         return true;
       }
       
-      console.error(`❌ Error details:`, error);
+      console.error('Error details:', error);
       return false;
     }
   }
@@ -76,7 +76,7 @@ class TwilioService {
     customerName: string, 
     issue: string
   ): Promise<boolean> {
-    const message = `🔧 NEW PLUMBING CALL ALERT!
+    const message = `NEW PLUMBING CALL ALERT!
 
 Customer: ${customerName}
 Issue: ${issue}

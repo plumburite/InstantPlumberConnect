@@ -73,7 +73,7 @@ export function useWebRTC({ callId, isInitiator, remoteSocketId }: UseWebRTCProp
 
       // Peer event handlers
       peer.on('signal', (data) => {
-        console.log('📡 Sending WebRTC signal:', data.type);
+        console.log('Sending WebRTC signal:', data.type);
         if (socket) {
           if (data.type === 'offer') {
             socket.emit('webrtc_offer', {
@@ -92,7 +92,7 @@ export function useWebRTC({ callId, isInitiator, remoteSocketId }: UseWebRTCProp
       });
 
       peer.on('stream', (remoteStream) => {
-        console.log('📺 Received remote stream');
+        console.log('Received remote stream');
         setState(prev => ({ ...prev, remoteStream }));
         
         if (remoteVideoRef.current) {
@@ -101,12 +101,12 @@ export function useWebRTC({ callId, isInitiator, remoteSocketId }: UseWebRTCProp
       });
 
       peer.on('connect', () => {
-        console.log('🤝 WebRTC connection established');
+        console.log('WebRTC connection established');
         setState(prev => ({ ...prev, isConnected: true, isLoading: false }));
       });
 
       peer.on('error', (err) => {
-        console.error('❌ WebRTC error:', err);
+        console.error('WebRTC error:', err);
         setState(prev => ({ 
           ...prev, 
           error: err.message || 'WebRTC connection failed',
@@ -115,14 +115,14 @@ export function useWebRTC({ callId, isInitiator, remoteSocketId }: UseWebRTCProp
       });
 
       peer.on('close', () => {
-        console.log('🔌 WebRTC connection closed');
+        console.log('WebRTC connection closed');
         setState(prev => ({ ...prev, isConnected: false }));
       });
 
       setState(prev => ({ ...prev, peer, isLoading: false }));
 
     } catch (error: any) {
-      console.error('❌ Failed to initialize WebRTC:', error);
+      console.error('Failed to initialize WebRTC:', error);
       setState(prev => ({ 
         ...prev, 
         error: error.message || 'Failed to access camera/microphone',
@@ -137,21 +137,21 @@ export function useWebRTC({ callId, isInitiator, remoteSocketId }: UseWebRTCProp
 
     const handleOffer = (data: { callId: string; offer: any; from: string }) => {
       if (data.callId === callId && state.peer && !isInitiator) {
-        console.log('📡 Received WebRTC offer');
+        console.log('Received WebRTC offer');
         state.peer.signal(data.offer);
       }
     };
 
     const handleAnswer = (data: { callId: string; answer: any; from: string }) => {
       if (data.callId === callId && state.peer && isInitiator) {
-        console.log('📡 Received WebRTC answer');
+        console.log('Received WebRTC answer');
         state.peer.signal(data.answer);
       }
     };
 
     const handleIceCandidate = (data: { callId: string; candidate: any; from: string }) => {
       if (data.callId === callId && state.peer) {
-        console.log('📡 Received ICE candidate');
+        console.log('Received ICE candidate');
         state.peer.signal(data.candidate);
       }
     };

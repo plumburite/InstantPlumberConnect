@@ -16,7 +16,7 @@ export function initializeFirebaseAdmin() {
     if (!serviceAccount) {
       // Only log warning in production - Firebase is optional for development
       if (process.env.NODE_ENV === 'production') {
-        console.log('⚠️  Firebase Admin SDK not initialized - missing service account key');
+        console.log('Warning: Firebase Admin SDK not initialized - missing service account key');
       }
       return null;
     }
@@ -26,10 +26,10 @@ export function initializeFirebaseAdmin() {
       projectId: process.env.FIREBASE_PROJECT_ID,
     });
 
-    console.log('✅ Firebase Admin SDK initialized');
+    console.log('Firebase Admin SDK initialized');
     return firebaseAdmin;
   } catch (error) {
-    console.error('❌ Error initializing Firebase Admin SDK:', error);
+    console.error('Error initializing Firebase Admin SDK:', error);
     return null;
   }
 }
@@ -53,7 +53,7 @@ export class FCMService {
 
   async sendNotificationToUser(userId: string, payload: NotificationPayload): Promise<boolean> {
     if (!this.messaging) {
-      console.log('⚠️  FCM not available - Firebase Admin not initialized');
+      console.log('Warning: FCM not available - Firebase Admin not initialized');
       return false;
     }
 
@@ -61,7 +61,7 @@ export class FCMService {
       // Get user's FCM token from database
       const user = await storage.getPlumber(userId);
       if (!user) {
-        console.log(`❌ User ${userId} not found`);
+        console.log(`User ${userId} not found`);
         return false;
       }
 
@@ -75,7 +75,7 @@ export class FCMService {
       }
 
       if (!fcmToken) {
-        console.log(`❌ No FCM token found for user ${userId}`);
+        console.log(`No FCM token found for user ${userId}`);
         return false;
       }
 
@@ -117,11 +117,11 @@ export class FCMService {
 
       // Send the message
       const response = await this.messaging.send(message);
-      console.log(`✅ Notification sent successfully to ${userId}:`, response);
+      console.log(`Notification sent successfully to ${userId}:`, response);
       return true;
 
     } catch (error: any) {
-      console.error(`❌ Error sending notification to ${userId}:`, error);
+      console.error(`Error sending notification to ${userId}:`, error);
       
       // Handle invalid token errors
       if (error.code === 'messaging/invalid-registration-token' || 
@@ -144,7 +144,7 @@ export class FCMService {
       result.status === 'fulfilled' && result.value === true
     ).length;
 
-    console.log(`📊 Sent notifications to ${successCount}/${userIds.length} users`);
+    console.log(`Sent notifications to ${successCount}/${userIds.length} users`);
     return successCount;
   }
 
@@ -159,7 +159,7 @@ export class FCMService {
       const availablePlumbers = await storage.getAvailablePlumbers();
       
       if (availablePlumbers.length === 0) {
-        console.log('📭 No available plumbers to notify');
+        console.log('No available plumbers to notify');
         return;
       }
 
@@ -180,7 +180,7 @@ export class FCMService {
       await this.sendNotificationToMultipleUsers(plumberIds, payload);
 
     } catch (error) {
-      console.error('❌ Error notifying plumbers of new call:', error);
+      console.error('Error notifying plumbers of new call:', error);
     }
   }
 
@@ -192,7 +192,7 @@ export class FCMService {
   }): Promise<void> {
     // Note: This would require storing customer FCM tokens as well
     // For now, we'll just log it
-    console.log(`📞 Would notify customer ${customerId} that plumber ${plumberData.firstName} ${plumberData.lastName} accepted the call`);
+    console.log(`Would notify customer ${customerId} that plumber ${plumberData.firstName} ${plumberData.lastName} accepted the call`);
   }
 
   async notifyParticipantsOfEndedCall(participantIds: string[], callData: {

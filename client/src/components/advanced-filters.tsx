@@ -275,7 +275,7 @@ export default function AdvancedFilters({ onFiltersChange, onClose }: AdvancedFi
             <div className="flex flex-wrap gap-2">
               {filters.minRating > 0 && (
                 <Badge variant="outline">
-                  {filters.minRating}+ ⭐ Rating
+                  {filters.minRating}+ Star Rating
                 </Badge>
               )}
               {filters.maxDistance < 25 && (

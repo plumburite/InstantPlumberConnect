@@ -70,7 +70,7 @@ export default function PlumberDashboard() {
         // Play sound and show notification
         playNotificationSound();
         showNotification(
-          '🔧 New Plumbing Call!',
+          'New Plumbing Call!',
           {
             body: `${newCall.customerName || 'Customer'}: ${newCall.issueDescription || 'Emergency plumbing assistance needed'}`,
             icon: '/favicon.ico',
@@ -105,7 +105,7 @@ export default function PlumberDashboard() {
       );
       
       if (acceptedCall && !showVideoChat) {
-        console.log('📹 Plumber entering video chat:', acceptedCall);
+        console.log('Plumber entering video chat:', acceptedCall);
         setShowVideoChat(true);
       }
     }

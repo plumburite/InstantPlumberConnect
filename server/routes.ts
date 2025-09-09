@@ -455,15 +455,15 @@ ${plumber?.company ? `${plumber.company}` : 'Instant Plumber Connect'}`;
       const plumber = await storage.getPlumber(userId);
       
       // Format appointment reminder message
-      const reminderMessage = `🔧 APPOINTMENT REMINDER
+      const reminderMessage = `APPOINTMENT REMINDER
 
 Hi ${customer.firstName},
 
 This is a reminder about your upcoming plumbing appointment:
 
-📅 Date: ${appointmentDate}
-🕐 Time: ${appointmentTime}
-${serviceType ? `🔧 Service: ${serviceType}` : ''}
+Date: ${appointmentDate}
+Time: ${appointmentTime}
+${serviceType ? `Service: ${serviceType}` : ''}
 
 Your plumber: ${plumber?.firstName || 'Unknown'} ${plumber?.lastName || 'Plumber'}
 ${plumber?.company ? `Company: ${plumber.company}` : ''}

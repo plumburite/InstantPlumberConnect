@@ -7,9 +7,9 @@ export async function connectDatabase() {
   try {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/plumber-connect';
     await mongoose.connect(mongoUri);
-    console.log('✅ Connected to MongoDB database');
+    console.log('Connected to MongoDB database');
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    console.error('MongoDB connection error:', error);
     throw error;
   }
 }

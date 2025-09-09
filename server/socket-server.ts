@@ -125,7 +125,7 @@ export class SocketServer {
             nearbyPlumbers = await storage.getAvailablePlumbers();
           }
 
-          console.log(`🔍 Found ${nearbyPlumbers.length} available plumbers`);
+          console.log(`Found ${nearbyPlumbers.length} available plumbers`);
 
           if (nearbyPlumbers.length === 0) {
             socket.emit('call_failed', { reason: 'No plumbers available in your area' });
@@ -182,7 +182,7 @@ export class SocketServer {
             return;
           }
 
-          console.log(`✅ Plumber ${data.plumberId} accepted call ${data.callId}`);
+          console.log(`Plumber ${data.plumberId} accepted call ${data.callId}`);
 
           // Update call session
           call.plumberId = data.plumberId;
