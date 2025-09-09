@@ -1,4 +1,4 @@
-import type { Express } from "express";
+// Express 2.5.11 doesn't have TypeScript types
 import { createServer, type Server } from "http";
 // Removed Replit Auth import
 import { storage } from "./storage";
@@ -9,7 +9,7 @@ import {
 import { SocketServer } from "./socket-server";
 import { twilioService } from "./twilio-service";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: any): Promise<Server> {
   // SMS Authentication storage
   const authCodes = new Map<string, { code: string, expires: number, firstName?: string, lastName?: string }>();
   const sessions = new Map<string, { phoneNumber: string, userId?: string }>();
