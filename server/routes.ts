@@ -24,7 +24,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const plumber = await storage.getPlumber(sessionData.userId);
         if (plumber) {
           req.user = {
-            id: plumber.id,
             userId: plumber.id,
             ...plumber
           };
