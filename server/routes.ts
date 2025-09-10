@@ -4,30 +4,57 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
   insertCallSchema, insertCustomerSchema, insertServiceSchema, 
-  insertInventorySchema, insertInvoiceSchema, insertInvoiceItemSchema, insertFileSchema 
+  insertInventorySchema, insertInvoiceSchema, insertInvoiceItemSchema, insertFileSchema,
+  authCodes, userSessions
 } from "@shared/schema";
 import { SocketServer } from "./socket-server";
 import { twilioService } from "./twilio-service";
+import { db } from "./db";
+import { eq, lt } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // SMS Authentication storage
-  const authCodes = new Map<string, { code: string, expires: number, firstName?: string, lastName?: string }>();
-  const sessions = new Map<string, { phoneNumber: string, userId?: string }>();
+  // Clean up expired auth codes and sessions on startup
+  async function cleanupExpiredData() {
+    try {
+      await db.delete(authCodes).where(lt(authCodes.expires, new Date()));
+      console.log('Cleaned up expired auth codes');
+    } catch (error) {
+      console.error('Error cleaning up expired auth codes:', error);
+    }
+  }
 
-  // Simple session middleware
+  // Run cleanup on startup
+  cleanupExpiredData();
+
+  // Simple session middleware using database
   app.use(async (req: any, res, next) => {
     const sessionId = req.headers['x-session-id'];
-    if (sessionId && sessions.has(sessionId)) {
-      const sessionData = sessions.get(sessionId);
-      if (sessionData?.userId) {
-        // Get full plumber data for authenticated requests
-        const plumber = await storage.getPlumber(sessionData.userId);
-        if (plumber) {
-          req.user = {
-            userId: plumber.id,
-            ...plumber
-          };
+    if (sessionId) {
+      try {
+        // Get session from database
+        const [sessionData] = await db
+          .select()
+          .from(userSessions)
+          .where(eq(userSessions.id, sessionId));
+
+        if (sessionData?.userId) {
+          // Update last used timestamp
+          await db
+            .update(userSessions)
+            .set({ lastUsed: new Date() })
+            .where(eq(userSessions.id, sessionId));
+
+          // Get full plumber data for authenticated requests
+          const plumber = await storage.getPlumber(sessionData.userId);
+          if (plumber) {
+            req.user = {
+              userId: plumber.id,
+              ...plumber
+            };
+          }
         }
+      } catch (error) {
+        console.error('Session middleware error:', error);
       }
     }
     next();
@@ -36,6 +63,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SMS Authentication Routes
   app.post("/api/auth/send-code", async (req, res) => {
     try {
+      console.log('Send code request:', { phoneNumber: req.body.phoneNumber, hasName: !!(req.body.firstName || req.body.lastName) });
+      
       const { phoneNumber, firstName, lastName } = req.body;
       
       if (!phoneNumber) {
@@ -44,9 +73,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      authCodes.set(phoneNumber, { code, expires, firstName, lastName });
+      // Store auth code in database (upsert - replace if exists)
+      await db
+        .insert(authCodes)
+        .values({
+          phoneNumber,
+          code,
+          expires,
+          firstName: firstName || null,
+          lastName: lastName || null,
+        })
+        .onConflictDoUpdate({
+          target: authCodes.phoneNumber,
+          set: {
+            code,
+            expires,
+            firstName: firstName || null,
+            lastName: lastName || null,
+            createdAt: new Date(),
+          },
+        });
+
+      console.log('Auth code stored in database for:', phoneNumber);
 
       // Format phone number (ensure it starts with +)
       let formattedPhone = phoneNumber.trim();
@@ -63,10 +113,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Store code with original phone number for verification consistency
-      const normalizedPhone = phoneNumber.trim();
-      
-
       let smsSuccess = false;
       
       // Try to send SMS via Twilio
@@ -76,27 +122,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           smsSuccess = await twilioService.sendSMS(formattedPhone, message);
 
           if (smsSuccess) {
+            console.log('SMS sent successfully to:', formattedPhone);
             res.json({ message: "Verification code sent successfully" });
             return;
           }
         } catch (smsError: any) {
-          // SMS send failed - handled gracefully
+          console.error('SMS send error:', smsError);
         }
       } else {
-        // Twilio not ready - handled gracefully
+        console.log('Twilio service not ready');
       }
 
-      // Fallback when SMS service unavailable
+      // Fallback when SMS service unavailable - still return success for development
+      console.log('SMS fallback - code available in database for testing');
       res.json({ 
         message: "Verification code sent"
       });
     } catch (error: any) {
+      console.error('Send code error:', error);
       
-      // Still generate code for testing even if SMS fails
-      const { phoneNumber, firstName, lastName } = req.body;
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = Date.now() + 10 * 60 * 1000;
-      authCodes.set(phoneNumber, { code, expires, firstName: firstName || '', lastName: lastName || '' });
+      // Still generate code for testing even if database fails
+      try {
+        const { phoneNumber, firstName, lastName } = req.body;
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = new Date(Date.now() + 10 * 60 * 1000);
+        
+        await db
+          .insert(authCodes)
+          .values({
+            phoneNumber,
+            code,
+            expires,
+            firstName: firstName || null,
+            lastName: lastName || null,
+          })
+          .onConflictDoUpdate({
+            target: authCodes.phoneNumber,
+            set: { code, expires, firstName: firstName || null, lastName: lastName || null },
+          });
+          
+        console.log('Fallback auth code generated for:', phoneNumber);
+      } catch (dbError) {
+        console.error('Database fallback error:', dbError);
+      }
       
       res.json({ message: "Verification code sent" });
     }
@@ -104,6 +172,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/verify-code", async (req, res) => {
     try {
+      console.log('Verify code request:', { phoneNumber: req.body.phoneNumber, code: req.body.code });
+      
       const { phoneNumber, code } = req.body;
       
       if (!phoneNumber || !code) {
@@ -113,23 +183,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Normalize phone number for lookup
       const normalizedPhone = phoneNumber.trim();
 
-      const authData = authCodes.get(normalizedPhone);
+      // Get auth data from database
+      const [authData] = await db
+        .select()
+        .from(authCodes)
+        .where(eq(authCodes.phoneNumber, normalizedPhone));
+      
       if (!authData) {
+        console.log('No auth code found for phone:', normalizedPhone);
         return res.status(400).json({ message: "No verification code found" });
       }
 
-      if (Date.now() > authData.expires) {
-        authCodes.delete(phoneNumber);
+      if (new Date() > authData.expires) {
+        console.log('Auth code expired for phone:', normalizedPhone);
+        // Delete expired auth code
+        await db.delete(authCodes).where(eq(authCodes.phoneNumber, normalizedPhone));
         return res.status(400).json({ message: "Verification code expired" });
       }
 
       if (authData.code !== code) {
+        console.log('Invalid code for phone:', normalizedPhone, 'expected:', authData.code, 'got:', code);
         return res.status(400).json({ message: "Invalid verification code" });
       }
+
+      console.log('Code verified successfully for phone:', normalizedPhone);
 
       // Code is valid - create/get user and session
       let user = await storage.getPlumberByPhone(phoneNumber);
       if (!user) {
+        console.log('Creating new plumber for phone:', phoneNumber);
         // Create new plumber
         user = await storage.createPlumber({
           firstName: authData.firstName || "Unknown",
@@ -142,14 +224,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           serviceRadius: 25,
           isAvailable: false
         });
+      } else {
+        console.log('Found existing plumber for phone:', phoneNumber);
       }
 
-      // Create session
+      // Create session in database
       const sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      sessions.set(sessionId, { phoneNumber, userId: user.id });
+      await db
+        .insert(userSessions)
+        .values({
+          id: sessionId,
+          phoneNumber,
+          userId: user.id,
+        });
 
-      // Clear auth code
-      authCodes.delete(phoneNumber);
+      console.log('Session created:', sessionId, 'for user:', user.id);
+
+      // Clear auth code from database
+      await db.delete(authCodes).where(eq(authCodes.phoneNumber, normalizedPhone));
 
       res.json({ 
         sessionId, 

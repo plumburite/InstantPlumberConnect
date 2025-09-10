@@ -14,6 +14,25 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Auth codes table for SMS verification
+export const authCodes = pgTable("auth_codes", {
+  phoneNumber: text("phone_number").primaryKey(),
+  code: text("code").notNull(),
+  expires: timestamp("expires").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+// User sessions table for authentication
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey(),
+  phoneNumber: text("phone_number").notNull(),
+  userId: varchar("user_id").references(() => plumbers.id),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  lastUsed: timestamp("last_used").default(sql`now()`),
+});
+
 export const plumbers = pgTable("plumbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
