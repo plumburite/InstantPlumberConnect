@@ -282,10 +282,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/logout", (req: any, res) => {
+  app.post("/api/auth/logout", async (req: any, res) => {
     const sessionId = req.headers['x-session-id'];
     if (sessionId) {
-      sessions.delete(sessionId);
+      try {
+        // Delete session from database
+        await db.delete(userSessions).where(eq(userSessions.id, sessionId));
+      } catch (error) {
+        console.error('Error deleting session:', error);
+      }
     }
     res.json({ message: "Logged out successfully" });
   });
@@ -304,9 +309,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize Socket.IO server
   const socketServer = new SocketServer(httpServer);
   
-  // Initialize FCM service
-  import('./fcm-service').then(({ fcmService }) => {
-  });
+  // FCM service temporarily disabled for deployment
+  // import('./fcm-service').then(({ fcmService }) => {
+  // });
 
 
   // Plumber availability toggle
@@ -413,25 +418,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // FCM Token registration endpoint
+  // FCM Token registration endpoint - TEMPORARILY DISABLED
   app.post("/api/plumber/fcm-token", async (req, res) => {
-    // Auth check handled by requireAuth middleware
-
-    try {
-      const { token } = req.body;
-      if (!token) {
-        return res.status(400).json({ message: "FCM token is required" });
-      }
-
-      // Update plumber's FCM token in database
-      if (storage.updatePlumberFCMToken) {
-        await storage.updatePlumberFCMToken(req.user!.id, token);
-      }
-
-      res.json({ message: "FCM token registered successfully" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Failed to register FCM token" });
-    }
+    res.json({ message: "FCM token registration temporarily disabled - feature will be added in future update" });
   });
 
 
