@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { SocketServer } from "./socket-server";
 import { twilioService } from "./twilio-service";
+import { emailService } from "./email-service";
 import { db } from "./db";
 import { eq, lt } from "drizzle-orm";
 
@@ -60,26 +61,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
-  // SMS Authentication Routes
+  // Authentication Routes - Email or SMS
   app.post("/api/auth/send-code", async (req, res) => {
     try {
-      console.log('Send code request:', { phoneNumber: req.body.phoneNumber, hasName: !!(req.body.firstName || req.body.lastName) });
+      const { phoneNumber, email, firstName, lastName } = req.body;
       
-      const { phoneNumber, firstName, lastName } = req.body;
-      
-      if (!phoneNumber) {
-        return res.status(400).json({ message: "Phone number is required" });
+      if (!phoneNumber && !email) {
+        return res.status(400).json({ message: "Phone number or email is required" });
       }
 
-      // Generate 6-digit code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      // Determine primary contact method
+      const contactMethod = email ? 'email' : 'phone';
+      const identifier = email || phoneNumber;
+      
+      console.log('Send code request:', { 
+        contactMethod, 
+        identifier: contactMethod === 'email' ? email : phoneNumber,
+        hasName: !!(firstName || lastName) 
+      });
+
+      // Generate cryptographically secure 6-digit code
+      const crypto = await import('crypto');
+      const code = crypto.randomInt(100000, 999999).toString();
       const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       // Store auth code in database (upsert - replace if exists)
+      // Use email as phone number field if email authentication
+      const dbKey = contactMethod === 'email' ? `email:${email}` : phoneNumber;
+      
       await db
         .insert(authCodes)
         .values({
-          phoneNumber,
+          phoneNumber: dbKey,
           code,
           expires,
           firstName: firstName || null,
@@ -96,74 +109,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
 
-      console.log('Auth code stored in database for:', phoneNumber);
+      console.log('Auth code stored in database for:', identifier);
 
-      // Format phone number (ensure it starts with +)
-      let formattedPhone = phoneNumber.trim();
-      if (!formattedPhone.startsWith('+')) {
-        // Clean the number to digits only
-        const digitsOnly = formattedPhone.replace(/[^\d]/g, '');
-        
-        // If it already starts with 1 (US country code), use it as is
-        if (digitsOnly.startsWith('1') && digitsOnly.length === 11) {
-          formattedPhone = '+' + digitsOnly;
-        } else {
-          // Otherwise assume US number and add +1
-          formattedPhone = '+1' + digitsOnly;
+      // Format phone number only if using phone authentication
+      let formattedPhone = '';
+      if (contactMethod === 'phone') {
+        formattedPhone = phoneNumber.trim();
+        if (!formattedPhone.startsWith('+')) {
+          // Clean the number to digits only
+          const digitsOnly = formattedPhone.replace(/[^\d]/g, '');
+          
+          // If it already starts with 1 (US country code), use it as is
+          if (digitsOnly.startsWith('1') && digitsOnly.length === 11) {
+            formattedPhone = '+' + digitsOnly;
+          } else {
+            // Otherwise assume US number and add +1
+            formattedPhone = '+1' + digitsOnly;
+          }
         }
       }
 
-      let smsSuccess = false;
-      
-      // Try to send SMS via Twilio
-      if (twilioService.isReady()) {
-        try {
-          const message = `Your Instant Plumber Connect verification code is: ${code}`;
-          smsSuccess = await twilioService.sendSMS(formattedPhone, message);
+      let deliverySuccess = false;
 
-          if (smsSuccess) {
-            console.log('SMS sent successfully to:', formattedPhone);
-            res.json({ message: "Verification code sent successfully" });
-            return;
+      if (contactMethod === 'email') {
+        // Send verification code via email
+        if (emailService.isReady()) {
+          try {
+            deliverySuccess = await emailService.sendVerificationEmail(email!, code, firstName);
+            if (deliverySuccess) {
+              console.log('Verification email sent successfully to:', email);
+              res.json({ message: "Verification code sent to your email" });
+              return;
+            }
+          } catch (emailError: any) {
+            console.error('Email send error:', emailError);
           }
-        } catch (smsError: any) {
-          console.error('SMS send error:', smsError);
+        } else {
+          console.log('Email service not ready');
         }
       } else {
-        console.log('Twilio service not ready');
+        // Send verification code via SMS
+        if (twilioService.isReady()) {
+          try {
+            const message = `Your Instant Plumber Connect verification code is: ${code}`;
+            deliverySuccess = await twilioService.sendSMS(formattedPhone, message);
+
+            if (deliverySuccess) {
+              console.log('SMS sent successfully to:', formattedPhone);
+              res.json({ message: "Verification code sent successfully" });
+              return;
+            }
+          } catch (smsError: any) {
+            console.error('SMS send error:', smsError);
+          }
+        } else {
+          console.log('Twilio service not ready');
+        }
       }
 
-      // Fallback when SMS service unavailable - still return success for development
-      console.log('SMS fallback - code available in database for testing');
-      res.json({ 
-        message: "Verification code sent"
-      });
+      // Fallback when delivery service unavailable - only succeed in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Delivery fallback - code available in database for testing');
+        res.json({ 
+          message: contactMethod === 'email' ? "Verification code sent to your email" : "Verification code sent"
+        });
+      } else {
+        console.error('Production delivery failure - no fallback');
+        res.status(500).json({
+          message: "Failed to send verification code. Please try again later."
+        });
+      }
     } catch (error: any) {
       console.error('Send code error:', error);
       
-      // Still generate code for testing even if database fails
+      // Generate code for testing even if database fails
       try {
-        const { phoneNumber, firstName, lastName } = req.body;
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const { phoneNumber, email, firstName, lastName } = req.body;
+        const crypto = await import('crypto');
+        const code = crypto.randomInt(100000, 999999).toString();
         const expires = new Date(Date.now() + 10 * 60 * 1000);
         
-        await db
-          .insert(authCodes)
-          .values({
-            phoneNumber,
-            code,
-            expires,
-            firstName: firstName || null,
-            lastName: lastName || null,
-          })
-          .onConflictDoUpdate({
-            target: authCodes.phoneNumber,
-            set: { code, expires, firstName: firstName || null, lastName: lastName || null },
-          });
-          
-        console.log('Fallback auth code generated for:', phoneNumber);
-      } catch (dbError) {
-        console.error('Database fallback error:', dbError);
+        // Use same logic as main code for determining contact method and db key
+        const contactMethod = email ? 'email' : 'phone';
+        const dbKey = contactMethod === 'email' ? `email:${email}` : phoneNumber;
+        
+        if (dbKey) { // Only try database if we have a valid key
+          await db
+            .insert(authCodes)
+            .values({
+              phoneNumber: dbKey,
+              code,
+              expires,
+              firstName: firstName || null,
+              lastName: lastName || null,
+            })
+            .onConflictDoUpdate({
+              target: authCodes.phoneNumber,
+              set: { code, expires, firstName: firstName || null, lastName: lastName || null },
+            });
+            
+          console.log('Database fallback successful for:', dbKey);
+        }
+      } catch (fallbackError: any) {
+        console.error('Database fallback error:', fallbackError);
       }
       
       res.json({ message: "Verification code sent" });
@@ -172,60 +220,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/verify-code", async (req, res) => {
     try {
-      console.log('Verify code request:', { phoneNumber: req.body.phoneNumber, code: req.body.code });
+      const { phoneNumber, email, code } = req.body;
       
-      const { phoneNumber, code } = req.body;
+      console.log('Verify code request:', { 
+        phoneNumber, 
+        email, 
+        code,
+        contactMethod: email ? 'email' : 'phone'
+      });
       
-      if (!phoneNumber || !code) {
-        return res.status(400).json({ message: "Phone number and code are required" });
+      if ((!phoneNumber && !email) || !code) {
+        return res.status(400).json({ message: "Phone number or email and code are required" });
       }
 
-      // Normalize phone number for lookup
-      const normalizedPhone = phoneNumber.trim();
+      // Determine lookup key based on contact method
+      const contactMethod = email ? 'email' : 'phone';
+      const lookupKey = contactMethod === 'email' ? `email:${email}` : phoneNumber.trim();
 
       // Get auth data from database
       const [authData] = await db
         .select()
         .from(authCodes)
-        .where(eq(authCodes.phoneNumber, normalizedPhone));
+        .where(eq(authCodes.phoneNumber, lookupKey));
       
       if (!authData) {
-        console.log('No auth code found for phone:', normalizedPhone);
+        console.log('No auth code found for:', lookupKey);
         return res.status(400).json({ message: "No verification code found" });
       }
 
       if (new Date() > authData.expires) {
-        console.log('Auth code expired for phone:', normalizedPhone);
+        console.log('Auth code expired for:', lookupKey);
         // Delete expired auth code
-        await db.delete(authCodes).where(eq(authCodes.phoneNumber, normalizedPhone));
+        await db.delete(authCodes).where(eq(authCodes.phoneNumber, lookupKey));
         return res.status(400).json({ message: "Verification code expired" });
       }
 
       if (authData.code !== code) {
-        console.log('Invalid code for phone:', normalizedPhone, 'expected:', authData.code, 'got:', code);
+        console.log('Invalid code for:', lookupKey, 'expected:', authData.code, 'got:', code);
         return res.status(400).json({ message: "Invalid verification code" });
       }
 
-      console.log('Code verified successfully for phone:', normalizedPhone);
+      console.log('Code verified successfully for:', lookupKey);
 
       // Code is valid - create/get user and session
-      let user = await storage.getPlumberByPhone(phoneNumber);
-      if (!user) {
-        console.log('Creating new plumber for phone:', phoneNumber);
-        // Create new plumber
-        user = await storage.createPlumber({
-          firstName: authData.firstName || "Unknown",
-          lastName: authData.lastName || "Plumber", 
-          email: `${phoneNumber}@phone.local`,
-          password: "sms-auth",
-          phoneNumber: phoneNumber,
-          company: "Self-Employed",
-          licenseNumber: "TEMP-" + Date.now(),
-          serviceRadius: 25,
-          isAvailable: false
-        });
+      let user;
+      if (contactMethod === 'email') {
+        user = await storage.getPlumberByEmail(email!);
+        if (!user) {
+          console.log('Creating new plumber for email:', email);
+          // Create new plumber with email auth
+          user = await storage.createPlumber({
+            firstName: authData.firstName || "Unknown",
+            lastName: authData.lastName || "Plumber", 
+            email: email!,
+            password: "email-auth",
+            phoneNumber: "", // No phone for email auth
+            company: "",
+            licenseNumber: "",
+            serviceRadius: 25,
+            isAvailable: false,
+            totalEarnings: 0,
+            rating: 5.0,
+            totalJobs: 0,
+            latitude: 0,
+            longitude: 0
+          });
+          
+          // Send welcome email for email authentication
+          if (emailService.isReady()) {
+            await emailService.sendWelcomeEmail(email!, authData.firstName || "there");
+          }
+        }
       } else {
-        console.log('Found existing plumber for phone:', phoneNumber);
+        user = await storage.getPlumberByPhone(phoneNumber);
+        if (!user) {
+          console.log('Creating new plumber for phone:', phoneNumber);
+          // Create new plumber
+          user = await storage.createPlumber({
+            firstName: authData.firstName || "Unknown",
+            lastName: authData.lastName || "Plumber", 
+            email: `${phoneNumber}@phone.local`,
+            password: "sms-auth",
+            phoneNumber: phoneNumber,
+            company: "",
+            licenseNumber: "",
+            serviceRadius: 25,
+            isAvailable: false,
+            totalEarnings: 0,
+            rating: 5.0,
+            totalJobs: 0,
+            latitude: 0,
+            longitude: 0
+          });
+        }
       }
 
       // Create session in database
@@ -234,14 +321,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .insert(userSessions)
         .values({
           id: sessionId,
-          phoneNumber,
+          phoneNumber: contactMethod === 'email' ? email! : phoneNumber,
           userId: user.id,
         });
 
       console.log('Session created:', sessionId, 'for user:', user.id);
 
-      // Clear auth code from database
-      await db.delete(authCodes).where(eq(authCodes.phoneNumber, normalizedPhone));
+      // Clear auth code from database (security: invalidate on successful verification)
+      await db.delete(authCodes).where(eq(authCodes.phoneNumber, lookupKey));
 
       res.json({ 
         sessionId, 
