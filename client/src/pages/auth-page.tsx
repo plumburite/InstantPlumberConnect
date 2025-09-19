@@ -12,9 +12,11 @@ import { Link } from "wouter";
 export default function AuthPage() {
   const { user, sendCodeMutation, verifyCodeMutation, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [step, setStep] = useState<'contact' | 'code'>('contact');
   const [formData, setFormData] = useState({
+    contactMethod: 'phone' as 'phone' | 'email',
     phoneNumber: '',
+    email: '',
     firstName: '',
     lastName: '',
     company: '',
@@ -32,21 +34,33 @@ export default function AuthPage() {
 
   const handleSendCode = (e: React.FormEvent) => {
     e.preventDefault();
-    sendCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
+    const data: any = {
       firstName: formData.firstName,
       lastName: formData.lastName
-    }, {
+    };
+    
+    if (formData.contactMethod === 'email') {
+      data.email = formData.email;
+    } else {
+      data.phoneNumber = formData.phoneNumber;
+    }
+    
+    sendCodeMutation.mutate(data, {
       onSuccess: () => setStep('code')
     });
   };
 
   const handleVerifyCode = (e: React.FormEvent) => {
     e.preventDefault();
-    verifyCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
-      code: formData.code
-    });
+    const data: any = { code: formData.code };
+    
+    if (formData.contactMethod === 'email') {
+      data.email = formData.email;
+    } else {
+      data.phoneNumber = formData.phoneNumber;
+    }
+    
+    verifyCodeMutation.mutate(data);
   };
 
   const updateForm = (field: keyof typeof formData, value: string) => {
@@ -77,9 +91,9 @@ export default function AuthPage() {
             <div className="text-center">
               <h1 className="text-3xl font-bold">Plumber Registration</h1>
               <p className="text-muted-foreground mt-2">
-                {step === 'phone' 
+                {step === 'contact' 
                   ? 'Join our network of professional plumbers' 
-                  : 'Verify your phone number to complete registration'
+                  : `Verify your ${formData.contactMethod} to complete registration`
                 }
               </p>
             </div>
@@ -87,11 +101,11 @@ export default function AuthPage() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {step === 'phone' ? 'Register/Login' : 'Enter Verification Code'}
+                  {step === 'contact' ? 'Register/Login' : 'Enter Verification Code'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {step === 'phone' ? (
+                {step === 'contact' ? (
                   <form onSubmit={handleSendCode} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -143,16 +157,49 @@ export default function AuthPage() {
                     </div>
 
                     <div>
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={formData.phoneNumber}
-                        onChange={(e) => updateForm("phoneNumber", e.target.value)}
-                        placeholder="+1 (555) 123-4567"
-                        required
-                        data-testid="input-phone-number"
-                      />
+                      <Label htmlFor="contact-method">Preferred Contact Method</Label>
+                      <Select 
+                        value={formData.contactMethod}
+                        onValueChange={(value: 'phone' | 'email') => updateForm("contactMethod", value)}
+                      >
+                        <SelectTrigger data-testid="select-contact-method">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="phone">Phone Number (SMS)</SelectItem>
+                          <SelectItem value="email">Email Address</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      {formData.contactMethod === 'email' ? (
+                        <>
+                          <Label htmlFor="email">Email Address</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => updateForm("email", e.target.value)}
+                            placeholder="john@example.com"
+                            required
+                            data-testid="input-email"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            value={formData.phoneNumber}
+                            onChange={(e) => updateForm("phoneNumber", e.target.value)}
+                            placeholder="+1 (555) 123-4567"
+                            required
+                            data-testid="input-phone-number"
+                          />
+                        </>
+                      )}
                     </div>
 
                     <div>
@@ -195,14 +242,14 @@ export default function AuthPage() {
                         data-testid="input-verification-code"
                       />
                       <p className="text-sm text-gray-600 mt-1">
-                        Enter the 6-digit code sent to {formData.phoneNumber}
+                        Enter the 6-digit code sent to {formData.contactMethod === 'email' ? formData.email : formData.phoneNumber}
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button 
                         type="button" 
                         variant="outline" 
-                        onClick={() => setStep('phone')}
+                        onClick={() => setStep('contact')}
                         className="flex-1"
                         data-testid="button-back"
                       >

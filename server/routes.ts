@@ -274,13 +274,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastName: authData.lastName || "Plumber", 
             email: email!,
             password: "email-auth",
-            phoneNumber: "", // No phone for email auth
+            phoneNumber: null, // No phone for email auth
             company: "",
             licenseNumber: "",
             serviceRadius: 25,
             isAvailable: false,
             totalEarnings: 0,
-            rating: 5.0,
+            rating: "5.0",
             totalJobs: 0,
             latitude: 0,
             longitude: 0
@@ -307,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             serviceRadius: 25,
             isAvailable: false,
             totalEarnings: 0,
-            rating: 5.0,
+            rating: "5.0",
             totalJobs: 0,
             latitude: 0,
             longitude: 0

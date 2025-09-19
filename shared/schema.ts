@@ -41,7 +41,7 @@ export const plumbers = pgTable("plumbers", {
   lastName: text("last_name").notNull(),
   company: text("company").notNull(),
   licenseNumber: text("license_number").notNull(),
-  phoneNumber: text("phone_number").notNull().unique(),
+  phoneNumber: text("phone_number").unique(),
   serviceRadius: integer("service_radius").notNull().default(25),
   isAvailable: boolean("is_available").notNull().default(false),
   rating: text("rating").default("4.9"),

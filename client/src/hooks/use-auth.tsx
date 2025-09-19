@@ -26,13 +26,15 @@ type AuthContextType = {
 };
 
 type SendCodeData = {
-  phoneNumber: string;
+  phoneNumber?: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
 };
 
 type VerifyCodeData = {
-  phoneNumber: string;
+  phoneNumber?: string;
+  email?: string;
   code: string;
 };
 
@@ -84,10 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/auth/send-code", data);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const contactMethod = variables.email ? "email" : "phone";
       toast({
         title: "Code Sent",
-        description: "Verification code sent to your phone",
+        description: `Verification code sent to your ${contactMethod}`,
       });
     },
     onError: (error: Error) => {
