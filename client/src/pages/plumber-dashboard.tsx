@@ -14,10 +14,12 @@ import { Phone, DollarSign, Star, Clock, Bell, BellOff, Video, MessageSquare, Us
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export default function PlumberDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { activeCalls, acceptCall: socketAcceptCall, isConnected } = useSocket();
   const { requestPermission, showNotification, playNotificationSound } = useNotifications();
   const [currentNotification, setCurrentNotification] = useState<any>(null);
@@ -111,16 +113,29 @@ export default function PlumberDashboard() {
       );
       
       if (acceptedCall && !showVideoChat) {
-        console.log('Plumber entering video chat:', acceptedCall);
-        setShowVideoChat(true);
+        console.log('Plumber entering video/chat:', acceptedCall);
+        
+        // If chat ID is available, navigate to chat instead of video chat
+        if (acceptedCall.chatId) {
+          toast({
+            title: "Customer connected!",
+            description: "Starting conversation...",
+          });
+          // Navigate to the chat using router
+          setLocation(`/chats/${acceptedCall.chatId}`);
+        } else {
+          // Fallback to video chat
+          setShowVideoChat(true);
+        }
       }
     }
-  }, [activeCalls, showVideoChat]);
+  }, [activeCalls, showVideoChat, toast]);
 
   const acceptCallHandler = (callId: string) => {
     socketAcceptCall(callId);
-    setShowVideoChat(true);
     setCurrentNotification(null);
+    
+    // The navigation will be handled by the useEffect above when the call status updates
     toast({
       title: "Call accepted!",
       description: "Connecting you with the customer...",

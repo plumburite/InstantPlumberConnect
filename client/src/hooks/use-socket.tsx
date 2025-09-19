@@ -2,6 +2,7 @@ import { createContext, ReactNode, useContext, useEffect, useState, useCallback 
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './use-auth';
 import { useToast } from './use-toast';
+import { queryClient } from '@/lib/queryClient';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -45,14 +46,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setIsConnected(true);
       
       // Identify user type and info
-      if (user) {
-        // Plumber user
+      if (user?.company) {
+        // Plumber user (has company)
         newSocket.emit('identify', {
           userType: 'plumber',
           userId: user.id,
         });
       } else {
-        // Customer user
+        // Customer user (no account or no company)
         newSocket.emit('identify', {
           userType: 'customer',
         });
@@ -150,11 +151,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       
       setActiveCalls(prev => {
         const updated = new Map(prev);
+        // Preserve all existing data and merge with server response including chatId
         updated.set(data.callId, { 
-          ...prev.get(data.callId),
+          ...(prev.get(data.callId) || {}),
+          ...data, // This includes chatId from server
           status: 'accepted',
-          customerSocketId: data.customerSocketId,
-          plumberSocketId: data.plumberSocketId,
         });
         return updated;
       });
@@ -166,6 +167,29 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         description: data.reason,
         variant: "destructive",
       });
+    });
+
+    // Chat event listeners for real-time inbox updates
+    newSocket.on('new_message', (data) => {
+      console.log('Received new message:', data);
+      
+      // Invalidate chat lists to update inbox
+      queryClient.invalidateQueries({ queryKey: ['/api/chats'] });
+      
+      // Also invalidate specific chat thread if someone is viewing it
+      if (data.chatId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/chats', data.chatId, 'messages'] });
+      }
+      
+      // Optionally show toast for messages not in current thread
+      // (You can add logic here to check if user is currently in this chat)
+    });
+
+    newSocket.on('chat_updated', (data) => {
+      console.log('Chat updated:', data);
+      
+      // Invalidate chat lists to refresh status/timestamps
+      queryClient.invalidateQueries({ queryKey: ['/api/chats'] });
     });
 
     return () => {

@@ -57,18 +57,25 @@ export default function CustomerDashboard() {
     enabled: !!user,
   });
 
-  // Listen for call status changes
+  // Listen for call status changes and chat creation
   useEffect(() => {
     if (activeCalls.size > 0) {
       const callEntries = Array.from(activeCalls.values());
       const acceptedCall = callEntries.find(call => call.status === 'accepted');
       
-      if (acceptedCall) {
+      if (acceptedCall && acceptedCall.chatId) {
+        toast({
+          title: "Plumber found!",
+          description: "Starting conversation with your plumber...",
+        });
+        // Navigate to the chat instead of video chat
+        setLocation(`/customer/chats/${acceptedCall.chatId}`);
+      } else if (acceptedCall) {
         toast({
           title: "Plumber found!",
           description: "Connecting you to video chat...",
         });
-        // Redirect to video chat or chat system
+        // Fallback to video chat if no chatId
         setLocation('/video-chat');
       }
     }
