@@ -3,8 +3,9 @@ import {
   type Customer, type InsertCustomer, type Service, type InsertService,
   type Inventory, type InsertInventory, type Invoice, type InsertInvoice,
   type InvoiceItem, type InsertInvoiceItem, type File, type InsertFile,
-  type User, type InsertUser,
-  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files
+  type User, type InsertUser, type Chat, type InsertChat,
+  type Message, type InsertMessage,
+  plumbers, calls, customers, services, inventory, invoices, invoiceItems, files, chats, messages
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
@@ -90,6 +91,20 @@ export interface IStorage {
   getPendingCalls?(): Promise<Call[]>;
   searchPlumbers?(filters: any): Promise<Plumber[]>;
   
+  // Chat management
+  getChat(id: string): Promise<Chat | undefined>;
+  createChat(chat: InsertChat): Promise<Chat>;
+  updateChat(id: string, updates: Partial<Chat>): Promise<Chat | undefined>;
+  getActiveChat(customerId: string, plumberId: string): Promise<Chat | undefined>;
+  getChatsByPlumber(plumberId: string): Promise<Chat[]>;
+  getChatsByCustomer(customerId: string): Promise<Chat[]>;
+  
+  // Message management
+  getMessage(id: string): Promise<Message | undefined>;
+  createMessage(message: InsertMessage): Promise<Message>;
+  getChatMessages(chatId: string, limit?: number): Promise<Message[]>;
+  markMessagesAsRead(messageIds: string[]): Promise<void>;
+  
   sessionStore: session.Store;
 }
 
@@ -103,6 +118,8 @@ export class MemStorage implements IStorage {
   private invoices: Map<string, Invoice>;
   private invoiceItems: Map<string, InvoiceItem>;
   private files: Map<string, File>;
+  private chats: Map<string, Chat>;
+  private messages: Map<string, Message>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -115,6 +132,8 @@ export class MemStorage implements IStorage {
     this.invoices = new Map();
     this.invoiceItems = new Map();
     this.files = new Map();
+    this.chats = new Map();
+    this.messages = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
     });
@@ -573,6 +592,98 @@ export class MemStorage implements IStorage {
   async searchPlumbers(filters: any): Promise<Plumber[]> {
     return this.getAvailablePlumbers();
   }
+
+  // Chat management methods
+  async getChat(id: string): Promise<Chat | undefined> {
+    return this.chats.get(id);
+  }
+
+  async createChat(chat: InsertChat): Promise<Chat> {
+    const id = randomUUID();
+    const now = new Date();
+    const newChat: Chat = {
+      id,
+      ...chat,
+      callId: chat.callId || null,
+      status: chat.status || 'active', // Ensure status defaults to 'active'
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: null,
+    };
+    this.chats.set(id, newChat);
+    return newChat;
+  }
+
+  async updateChat(id: string, updates: Partial<Chat>): Promise<Chat | undefined> {
+    const chat = this.chats.get(id);
+    if (!chat) return undefined;
+
+    const updatedChat: Chat = {
+      ...chat,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.chats.set(id, updatedChat);
+    return updatedChat;
+  }
+
+  async getActiveChat(customerId: string, plumberId: string): Promise<Chat | undefined> {
+    return Array.from(this.chats.values()).find(
+      c => c.customerId === customerId && c.plumberId === plumberId && c.status === 'active'
+    );
+  }
+
+  async getChatsByPlumber(plumberId: string): Promise<Chat[]> {
+    return Array.from(this.chats.values()).filter(c => c.plumberId === plumberId);
+  }
+
+  async getChatsByCustomer(customerId: string): Promise<Chat[]> {
+    return Array.from(this.chats.values()).filter(c => c.customerId === customerId);
+  }
+
+  // Message management methods
+  async getMessage(id: string): Promise<Message | undefined> {
+    return this.messages.get(id);
+  }
+
+  async createMessage(message: InsertMessage): Promise<Message> {
+    const id = randomUUID();
+    const now = new Date();
+    const newMessage: Message = {
+      id,
+      ...message,
+      createdAt: now,
+      readAt: null,
+    };
+    this.messages.set(id, newMessage);
+    return newMessage;
+  }
+
+  async getChatMessages(chatId: string, limit?: number): Promise<Message[]> {
+    let messages = Array.from(this.messages.values())
+      .filter(m => m.chatId === chatId)
+      .sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+    
+    if (limit) {
+      messages = messages.slice(-limit); // Get the last N messages
+    }
+    
+    return messages;
+  }
+
+  async markMessagesAsRead(messageIds: string[]): Promise<void> {
+    const now = new Date();
+    for (const messageId of messageIds) {
+      const message = this.messages.get(messageId);
+      if (message && !message.readAt) {
+        const updatedMessage: Message = {
+          ...message,
+          readAt: now,
+        };
+        this.messages.set(messageId, updatedMessage);
+      }
+    }
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -923,6 +1034,75 @@ export class DatabaseStorage implements IStorage {
 
   async searchPlumbers(filters: any): Promise<Plumber[]> {
     return this.getAvailablePlumbers();
+  }
+
+  // Chat management methods - Database implementation
+  async getChat(id: string): Promise<Chat | undefined> {
+    const result = await db.select().from(chats).where(eq(chats.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createChat(chat: InsertChat): Promise<Chat> {
+    const result = await db.insert(chats).values({
+      ...chat,
+      lastMessageAt: null,
+    }).returning();
+    return result[0];
+  }
+
+  async updateChat(id: string, updates: Partial<Chat>): Promise<Chat | undefined> {
+    const result = await db.update(chats)
+      .set({ ...updates, updatedAt: sql`now()` })
+      .where(eq(chats.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async getActiveChat(customerId: string, plumberId: string): Promise<Chat | undefined> {
+    const result = await db.select()
+      .from(chats)
+      .where(sql`${chats.customerId} = ${customerId} AND ${chats.plumberId} = ${plumberId} AND ${chats.status} = 'active'`)
+      .limit(1);
+    return result[0];
+  }
+
+  async getChatsByPlumber(plumberId: string): Promise<Chat[]> {
+    return await db.select().from(chats).where(eq(chats.plumberId, plumberId));
+  }
+
+  async getChatsByCustomer(customerId: string): Promise<Chat[]> {
+    return await db.select().from(chats).where(eq(chats.customerId, customerId));
+  }
+
+  // Message management methods - Database implementation
+  async getMessage(id: string): Promise<Message | undefined> {
+    const result = await db.select().from(messages).where(eq(messages.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createMessage(message: InsertMessage): Promise<Message> {
+    const result = await db.insert(messages).values(message).returning();
+    return result[0];
+  }
+
+  async getChatMessages(chatId: string, limit?: number): Promise<Message[]> {
+    let query = db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(sql`${messages.createdAt} DESC`);
+    
+    if (limit) {
+      const result = await query.limit(limit);
+      return result.reverse(); // Return in ascending order (oldest first)
+    }
+    
+    const result = await query;
+    return result.reverse(); // Return in ascending order (oldest first)
+  }
+
+  async markMessagesAsRead(messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    
+    await db.update(messages)
+      .set({ readAt: sql`now()` })
+      .where(sql`${messages.id} = ANY(${messageIds}) AND ${messages.readAt} IS NULL`);
   }
 }
 

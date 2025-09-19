@@ -586,6 +586,21 @@ export class SocketServer {
     });
   }
 
+  // Public method to broadcast messages to chat rooms (for REST API integration)
+  public broadcastMessageToChat(chatId: string, message: any, senderId: string, senderType: string) {
+    // Emit message to all users in the chat room
+    this.io.to(`chat_${chatId}`).emit('new_message', {
+      chatId: chatId,
+      message: {
+        ...message,
+        sender: {
+          id: senderId,
+          type: senderType,
+        }
+      }
+    });
+  }
+
   // Get connected users stats
   public getStats() {
     const customers = Array.from(this.connectedUsers.values()).filter(u => u.userType === 'customer').length;

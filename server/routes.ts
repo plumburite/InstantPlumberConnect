@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { 
   insertCallSchema, insertCustomerSchema, insertServiceSchema, 
   insertInventorySchema, insertInvoiceSchema, insertInvoiceItemSchema, insertFileSchema,
+  insertChatSchema, insertMessageSchema, sendMessageSchema, createChatSchema,
   authCodes, userSessions
 } from "@shared/schema";
 import { SocketServer } from "./socket-server";
@@ -45,13 +46,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .set({ lastUsed: new Date() })
             .where(eq(userSessions.id, sessionId));
 
-          // Get full plumber data for authenticated requests
+          // Get user data for authenticated requests (check both plumbers and customers)
           const plumber = await storage.getPlumber(sessionData.userId);
           if (plumber) {
             req.user = {
               userId: plumber.id,
+              userType: 'plumber',
               ...plumber
             };
+          } else {
+            // Check if it's a customer
+            const customer = await storage.getCustomer(sessionData.userId);
+            if (customer) {
+              req.user = {
+                userId: customer.id,
+                userType: 'customer',
+                ...customer
+              };
+            }
           }
         }
       } catch (error) {
@@ -395,6 +407,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Initialize Socket.IO server
   const socketServer = new SocketServer(httpServer);
+  
+  // Store socketServer reference for broadcasting from REST endpoints
+  let socketServerInstance: SocketServer = socketServer;
   
   // FCM service temporarily disabled for deployment
   // import('./fcm-service').then(({ fcmService }) => {
@@ -1038,6 +1053,207 @@ Please let us know if you need to reschedule.
       res.json({ message: "File deleted successfully" });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to delete file" });
+    }
+  });
+
+  // === CHAT MANAGEMENT ===
+  
+  // Get all chats for authenticated user
+  app.get("/api/chats", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const userType = req.user.userType;
+      let chats = [];
+      
+      // Fetch chats based on user type
+      if (userType === 'plumber') {
+        chats = await storage.getChatsByPlumber(userId);
+      } else if (userType === 'customer') {
+        chats = await storage.getChatsByCustomer(userId);
+      } else {
+        return res.status(400).json({ message: "Invalid user type" });
+      }
+      
+      res.json(chats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch chats" });
+    }
+  });
+
+  // Get a specific chat
+  app.get("/api/chats/:id", requireAuth, async (req: any, res) => {
+    try {
+      const chat = await storage.getChat(req.params.id);
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+
+      // Verify user has access to this chat
+      const userId = req.user.userId;
+      const hasAccess = chat.customerId === userId || chat.plumberId === userId;
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this chat" });
+      }
+
+      res.json(chat);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch chat" });
+    }
+  });
+
+  // Create a new chat
+  app.post("/api/chats", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const validatedData = createChatSchema.parse(req.body);
+      
+      // Verify user is one of the participants
+      if (userId !== validatedData.customerId && userId !== validatedData.plumberId) {
+        return res.status(403).json({ message: "Can only create chat between yourself and another user" });
+      }
+
+      // Check if active chat already exists between these users
+      const existingChat = await storage.getActiveChat(validatedData.customerId, validatedData.plumberId);
+      if (existingChat) {
+        return res.json(existingChat);
+      }
+
+      const chat = await storage.createChat(validatedData);
+      res.status(201).json(chat);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to create chat" });
+    }
+  });
+
+  // Update chat status (archive, close, etc.)
+  app.patch("/api/chats/:id", requireAuth, async (req: any, res) => {
+    try {
+      const chat = await storage.getChat(req.params.id);
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+
+      // Verify user has access to this chat
+      const userId = req.user.userId;
+      const hasAccess = chat.customerId === userId || chat.plumberId === userId;
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this chat" });
+      }
+
+      // Only allow safe field updates - prevent changing participant IDs
+      const allowedUpdates = {
+        status: req.body.status,
+      };
+
+      // Remove undefined fields
+      Object.keys(allowedUpdates).forEach(key => {
+        if (allowedUpdates[key] === undefined) {
+          delete allowedUpdates[key];
+        }
+      });
+
+      if (Object.keys(allowedUpdates).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+
+      const updatedChat = await storage.updateChat(req.params.id, allowedUpdates);
+      res.json(updatedChat);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update chat" });
+    }
+  });
+
+  // === MESSAGE MANAGEMENT ===
+
+  // Get messages for a chat
+  app.get("/api/chats/:id/messages", requireAuth, async (req: any, res) => {
+    try {
+      const chat = await storage.getChat(req.params.id);
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+
+      // Verify user has access to this chat
+      const userId = req.user.userId;
+      const hasAccess = chat.customerId === userId || chat.plumberId === userId;
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this chat" });
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const messages = await storage.getChatMessages(req.params.id, limit);
+      
+      res.json(messages);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch messages" });
+    }
+  });
+
+  // Send a message (REST endpoint - real-time via Socket.IO)
+  app.post("/api/chats/:id/messages", requireAuth, async (req: any, res) => {
+    try {
+      const chat = await storage.getChat(req.params.id);
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+
+      // Verify user has access to this chat
+      const userId = req.user.userId;
+      const hasAccess = chat.customerId === userId || chat.plumberId === userId;
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this chat" });
+      }
+
+      // Determine sender type
+      const senderType = chat.plumberId === userId ? 'plumber' : 'customer';
+      
+      const messageData = sendMessageSchema.parse({
+        chatId: req.params.id,
+        senderId: userId,
+        senderType,
+        content: req.body.content,
+        messageType: req.body.messageType || 'text',
+      });
+
+      const message = await storage.createMessage(messageData);
+
+      // Update chat's last message time
+      await storage.updateChat(req.params.id, {
+        lastMessageAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // Broadcast message to Socket.IO users in the chat room
+      socketServerInstance.broadcastMessageToChat(
+        req.params.id,
+        message,
+        userId,
+        senderType
+      );
+
+      res.status(201).json(message);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to send message" });
+    }
+  });
+
+  // Mark messages as read
+  app.patch("/api/messages/read", requireAuth, async (req: any, res) => {
+    try {
+      const { messageIds } = req.body;
+      
+      if (!Array.isArray(messageIds) || messageIds.length === 0) {
+        return res.status(400).json({ message: "messageIds array is required" });
+      }
+
+      await storage.markMessagesAsRead(messageIds);
+      res.json({ message: "Messages marked as read" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to mark messages as read" });
     }
   });
 
