@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { storage } from './storage';
-import { insertCallSchema } from '@shared/schema';
+import { insertCallSchema, sendMessageSchema, createChatSchema } from '@shared/schema';
 import { twilioService } from './twilio-service';
 
 interface ConnectedUser {
@@ -324,6 +324,215 @@ export class SocketServer {
             await storage.updatePlumberLocation(user.userId, data.lat, data.lng);
           }
         }
+      });
+
+      // === CHAT FUNCTIONALITY ===
+
+      // Join a chat room
+      socket.on('join_chat', async (data: { chatId: string }) => {
+        try {
+          const user = this.connectedUsers.get(socket.id);
+          if (!user || !user.userId) {
+            socket.emit('chat_error', { message: 'Authentication required' });
+            return;
+          }
+
+          // Verify user belongs to this chat
+          const chat = await storage.getChat(data.chatId);
+          if (!chat) {
+            socket.emit('chat_error', { message: 'Chat not found' });
+            return;
+          }
+
+          const belongsToChat = (user.userType === 'customer' && chat.customerId === user.userId) ||
+                               (user.userType === 'plumber' && chat.plumberId === user.userId);
+          
+          if (!belongsToChat) {
+            socket.emit('chat_error', { message: 'Access denied to this chat' });
+            return;
+          }
+
+          // Join the chat room
+          socket.join(`chat_${data.chatId}`);
+          
+          // Notify user they joined successfully
+          socket.emit('chat_joined', { chatId: data.chatId });
+
+          // Get recent messages and send to user
+          const messages = await storage.getChatMessages(data.chatId, 50);
+          socket.emit('chat_history', { chatId: data.chatId, messages });
+
+        } catch (error) {
+          console.error('Error joining chat:', error);
+          socket.emit('chat_error', { message: 'Failed to join chat' });
+        }
+      });
+
+      // Leave a chat room
+      socket.on('leave_chat', (data: { chatId: string }) => {
+        socket.leave(`chat_${data.chatId}`);
+        socket.emit('chat_left', { chatId: data.chatId });
+      });
+
+      // Send a message
+      socket.on('send_message', async (data: {
+        chatId: string;
+        content: string;
+        messageType?: 'text' | 'image' | 'file';
+      }) => {
+        try {
+          const user = this.connectedUsers.get(socket.id);
+          if (!user || !user.userId) {
+            socket.emit('chat_error', { message: 'Authentication required' });
+            return;
+          }
+
+          // Validate message data
+          const messageData = sendMessageSchema.parse({
+            chatId: data.chatId,
+            senderId: user.userId,
+            senderType: user.userType,
+            content: data.content,
+            messageType: data.messageType || 'text',
+          });
+
+          // Verify user belongs to this chat
+          const chat = await storage.getChat(data.chatId);
+          if (!chat) {
+            socket.emit('chat_error', { message: 'Chat not found' });
+            return;
+          }
+
+          const belongsToChat = (user.userType === 'customer' && chat.customerId === user.userId) ||
+                               (user.userType === 'plumber' && chat.plumberId === user.userId);
+          
+          if (!belongsToChat) {
+            socket.emit('chat_error', { message: 'Access denied to this chat' });
+            return;
+          }
+
+          // Create message in database
+          const message = await storage.createMessage(messageData);
+
+          // Update chat's last message time
+          await storage.updateChat(data.chatId, {
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // Emit message to all users in the chat room
+          this.io.to(`chat_${data.chatId}`).emit('new_message', {
+            chatId: data.chatId,
+            message: {
+              ...message,
+              sender: {
+                id: user.userId,
+                type: user.userType,
+              }
+            }
+          });
+
+        } catch (error) {
+          console.error('Error sending message:', error);
+          socket.emit('chat_error', { message: 'Failed to send message' });
+        }
+      });
+
+      // Create a new chat
+      socket.on('create_chat', async (data: {
+        customerId: string;
+        plumberId: string;
+        callId?: string;
+      }) => {
+        try {
+          const user = this.connectedUsers.get(socket.id);
+          if (!user || !user.userId) {
+            socket.emit('chat_error', { message: 'Authentication required' });
+            return;
+          }
+
+          // Verify user is one of the participants
+          if (user.userId !== data.customerId && user.userId !== data.plumberId) {
+            socket.emit('chat_error', { message: 'Can only create chat between yourself and another user' });
+            return;
+          }
+
+          // Validate chat data
+          const chatData = createChatSchema.parse({
+            customerId: data.customerId,
+            plumberId: data.plumberId,
+            callId: data.callId,
+            status: 'active',
+          });
+
+          // Check if active chat already exists between these users
+          const existingChat = await storage.getActiveChat(data.customerId, data.plumberId);
+          if (existingChat) {
+            socket.emit('chat_created', { chat: existingChat });
+            return;
+          }
+
+          // Create new chat
+          const chat = await storage.createChat(chatData);
+
+          // Notify both participants
+          this.io.to(`plumber_${data.plumberId}`).emit('chat_created', { chat });
+          if (data.customerId !== user.userId) {
+            // Notify customer if plumber created the chat
+            // Note: Customer sockets use different identification - they might not have userId rooms
+            // We'll need to track customer sockets differently
+          }
+
+          socket.emit('chat_created', { chat });
+
+        } catch (error) {
+          console.error('Error creating chat:', error);
+          socket.emit('chat_error', { message: 'Failed to create chat' });
+        }
+      });
+
+      // Mark messages as read
+      socket.on('mark_messages_read', async (data: { chatId: string; messageIds: string[] }) => {
+        try {
+          const user = this.connectedUsers.get(socket.id);
+          if (!user || !user.userId) return;
+
+          // Update read status in database
+          await storage.markMessagesAsRead(data.messageIds);
+
+          // Notify other participant about read receipts
+          this.io.to(`chat_${data.chatId}`).emit('messages_read', {
+            chatId: data.chatId,
+            messageIds: data.messageIds,
+            readBy: user.userId,
+          });
+
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
+      });
+
+      // Typing indicators
+      socket.on('typing_start', (data: { chatId: string }) => {
+        const user = this.connectedUsers.get(socket.id);
+        if (!user || !user.userId) return;
+
+        socket.to(`chat_${data.chatId}`).emit('user_typing', {
+          chatId: data.chatId,
+          userId: user.userId,
+          userType: user.userType,
+        });
+      });
+
+      socket.on('typing_stop', (data: { chatId: string }) => {
+        const user = this.connectedUsers.get(socket.id);
+        if (!user || !user.userId) return;
+
+        socket.to(`chat_${data.chatId}`).emit('user_stopped_typing', {
+          chatId: data.chatId,
+          userId: user.userId,
+          userType: user.userType,
+        });
       });
 
       // Handle disconnect
