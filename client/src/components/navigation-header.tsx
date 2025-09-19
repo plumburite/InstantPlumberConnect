@@ -1,11 +1,19 @@
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Wrench, LogOut } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Wrench, LogOut, MessageSquare } from "lucide-react";
 
 export default function NavigationHeader() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  
+  // Fetch user's chats for badge count
+  const { data: chats = [] } = useQuery({
+    queryKey: ['/api/chats'],
+    enabled: !!user,
+  });
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -28,6 +36,15 @@ export default function NavigationHeader() {
                 </Link>
                 <Link href="/crm" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/crm' ? 'text-foreground font-medium' : ''}`}>
                   CRM
+                </Link>
+                <Link href="/chats" className={`flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors ${location?.startsWith('/chats') ? 'text-foreground font-medium' : ''}`} data-testid="nav-messages">
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Messages</span>
+                  {chats.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 text-xs">
+                      {chats.length}
+                    </Badge>
+                  )}
                 </Link>
                 <Button 
                   variant="outline" 

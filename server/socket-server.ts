@@ -199,6 +199,30 @@ export class SocketServer {
 
           // Get plumber info
           const plumber = await storage.getPlumber(data.plumberId);
+
+          // Create chat between customer and plumber
+          let chatId = null;
+          try {
+            // Check if there's already an active chat between these users
+            const existingChat = await storage.getActiveChat(call.customerId, data.plumberId);
+            
+            if (existingChat) {
+              chatId = existingChat.id;
+              console.log(`Using existing chat ${chatId} for customer ${call.customerId} and plumber ${data.plumberId}`);
+            } else {
+              // Create new chat
+              const newChat = await storage.createChat({
+                customerId: call.customerId,
+                plumberId: data.plumberId,
+                callId: data.callId,
+                status: 'active'
+              });
+              chatId = newChat.id;
+              console.log(`Created new chat ${chatId} for customer ${call.customerId} and plumber ${data.plumberId}`);
+            }
+          } catch (error) {
+            console.error('Error creating chat:', error);
+          }
           
           // Notify customer that plumber accepted
           this.io.to(call.customerSocketId).emit('call_accepted', {
@@ -206,6 +230,7 @@ export class SocketServer {
             plumber: plumber,
             plumberSocketId: socket.id,
             customerSocketId: call.customerSocketId,
+            chatId: chatId, // Include chat ID for navigation
           });
 
           // Notify plumber of successful accept
@@ -214,6 +239,7 @@ export class SocketServer {
             customerInfo: call.customerInfo,
             customerSocketId: call.customerSocketId,
             plumberSocketId: socket.id,
+            chatId: chatId, // Include chat ID for navigation
           });
 
           // Notify other plumbers that call was taken

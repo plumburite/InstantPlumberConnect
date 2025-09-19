@@ -15,9 +15,16 @@ import CustomerLogin from "@/pages/customer-login";
 import PlumberDashboard from "@/pages/plumber-dashboard";
 import CrmDashboard from "@/pages/crm-dashboard";
 import NotFound from "@/pages/not-found";
+import ChatInbox from "@/pages/chat-inbox";
+import ChatThread from "@/pages/chat-thread";
+import CustomerDashboard from "@/pages/customer-dashboard";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  // Determine user type based on user data
+  const isPlumber = user && user.company;
+  const isCustomer = user && !user.company;
 
   return (
     <Switch>
@@ -25,9 +32,19 @@ function Router() {
         <Route path="/" component={HomePage} />
       ) : (
         <>
-          <Route path="/" component={PlumberDashboard} />
+          {/* Default dashboard routes based on user type */}
+          <Route path="/" component={() => isPlumber ? <PlumberDashboard /> : <CustomerDashboard />} />
+          
+          {/* Plumber-specific routes */}
           <ProtectedRoute path="/dashboard" component={() => <PlumberDashboard />} />
           <ProtectedRoute path="/crm" component={() => <CrmDashboard />} />
+          <ProtectedRoute path="/chats" component={() => <ChatInbox />} />
+          <ProtectedRoute path="/chats/:id" component={() => <ChatThread />} />
+          
+          {/* Customer-specific routes */}
+          <ProtectedRoute path="/customer" component={() => <CustomerDashboard />} />
+          <ProtectedRoute path="/customer/chats" component={() => <ChatInbox />} />
+          <ProtectedRoute path="/customer/chats/:id" component={() => <ChatThread />} />
         </>
       )}
       <Route path="/auth" component={AuthPage} />

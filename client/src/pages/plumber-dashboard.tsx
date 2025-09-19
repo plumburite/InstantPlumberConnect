@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Phone, DollarSign, Star, Clock, Bell, BellOff, Video } from "lucide-react";
+import { Phone, DollarSign, Star, Clock, Bell, BellOff, Video, MessageSquare, User } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +49,12 @@ export default function PlumberDashboard() {
   // Get plumber calls
   const { data: calls } = useQuery({
     queryKey: ["/api/plumber/calls"],
+    enabled: !!user,
+  });
+
+  // Get plumber chats
+  const { data: recentChats = [] } = useQuery({
+    queryKey: ['/api/chats'],
     enabled: !!user,
   });
 
@@ -280,7 +286,7 @@ export default function PlumberDashboard() {
         </div>
         
         {/* Recent Calls & Notifications */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recent Calls */}
           <Card>
             <CardHeader>
@@ -374,6 +380,82 @@ export default function PlumberDashboard() {
                   {user.isAvailable && (
                     <p className="text-xs mt-2">You're online and ready to receive calls!</p>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Chats */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center space-x-2">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Recent Chats</span>
+                </span>
+                {recentChats.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    data-testid="button-view-all-chats"
+                  >
+                    <Link href="/chats">View All</Link>
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentChats.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground" data-testid="no-chats">
+                  <MessageSquare className="text-2xl mb-2 mx-auto" />
+                  <p className="text-sm">No conversations yet</p>
+                  <p className="text-xs mt-2">Customer chats will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentChats.slice(0, 3).map((chat: any) => {
+                    const customerName = chat.customerName || 'Customer';
+                    const initials = customerName.split(' ')
+                      .map((name: string) => name.charAt(0).toUpperCase())
+                      .join('');
+                    
+                    return (
+                      <Link key={chat.id} href={`/chats/${chat.id}`}>
+                        <div
+                          className="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                          data-testid={`recent-chat-${chat.id}`}
+                        >
+                          <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium">
+                              {initials || <User className="h-4 w-4" />}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium text-sm truncate">
+                                {customerName}
+                              </h4>
+                              <Badge
+                                variant={chat.status === 'active' ? 'default' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {chat.status}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {chat.lastMessage || 'No messages yet'}
+                            </p>
+                            {chat.lastMessageAt && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(chat.lastMessageAt).toLocaleDateString()} • {new Date(chat.lastMessageAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
