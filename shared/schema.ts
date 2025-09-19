@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, integer, timestamp, decimal, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, integer, timestamp, decimal, json, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -150,17 +150,53 @@ export const files = pgTable("files", {
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
+// Chat Tables
+export const chats = pgTable("chats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").references(() => calls.id, { onDelete: "set null" }),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  plumberId: varchar("plumber_id").notNull().references(() => plumbers.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("active"), // active, archived, closed
+  lastMessageAt: timestamp("last_message_at"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => ({
+  idxChatsCustomer: index("idx_chats_customer").on(table.customerId),
+  idxChatsPlumber: index("idx_chats_plumber").on(table.plumberId),
+  idxChatsStatus: index("idx_chats_status").on(table.status),
+  idxChatsLastMessage: index("idx_chats_last_message").on(table.lastMessageAt),
+  idxChatsCallId: index("idx_chats_call_id").on(table.callId),
+  // Ensure only one active chat per customer-plumber pair
+  uniqueActiveChat: unique("unique_active_chat").on(table.customerId, table.plumberId, table.status),
+}));
+
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chatId: varchar("chat_id").notNull().references(() => chats.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").notNull(), // customer or plumber ID
+  senderType: text("sender_type").notNull(), // customer, plumber
+  content: text("content").notNull(),
+  messageType: text("message_type").notNull().default("text"), // text, image, file
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+}, (table) => ({
+  idxMessagesChatCreated: index("idx_messages_chat_created").on(table.chatId, table.createdAt),
+  idxMessagesSender: index("idx_messages_sender").on(table.senderId, table.senderType),
+}));
+
 // Relations
 export const plumbersRelations = relations(plumbers, ({ many }) => ({
   calls: many(calls),
   invoices: many(invoices),
   files: many(files),
+  chats: many(chats),
 }));
 
 export const customersRelations = relations(customers, ({ many }) => ({
   calls: many(calls),
   invoices: many(invoices),
   files: many(files),
+  chats: many(chats),
 }));
 
 export const callsRelations = relations(calls, ({ one, many }) => ({
@@ -174,6 +210,7 @@ export const callsRelations = relations(calls, ({ one, many }) => ({
   }),
   invoices: many(invoices),
   files: many(files),
+  chats: many(chats),
 }));
 
 export const servicesRelations = relations(services, ({ many }) => ({
@@ -235,6 +272,29 @@ export const filesRelations = relations(files, ({ one }) => ({
   }),
 }));
 
+export const chatsRelations = relations(chats, ({ one, many }) => ({
+  call: one(calls, {
+    fields: [chats.callId],
+    references: [calls.id],
+  }),
+  customer: one(customers, {
+    fields: [chats.customerId],
+    references: [customers.id],
+  }),
+  plumber: one(plumbers, {
+    fields: [chats.plumberId],
+    references: [plumbers.id],
+  }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  chat: one(chats, {
+    fields: [messages.chatId],
+    references: [chats.id],
+  }),
+}));
+
 // Insert Schemas and Types
 export const insertPlumberSchema = createInsertSchema(plumbers).omit({
   id: true,
@@ -282,6 +342,37 @@ export const insertFileSchema = createInsertSchema(files).omit({
   createdAt: true,
 });
 
+export const insertChatSchema = createInsertSchema(chats).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["active", "archived", "closed"]).default("active"),
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  senderType: z.enum(["customer", "plumber"]),
+  messageType: z.enum(["text", "image", "file"]).default("text"),
+});
+
+// Enhanced message schema with sender validation for API use
+export const sendMessageSchema = insertMessageSchema.refine((data) => {
+  return data.senderId && data.senderType && data.content && data.chatId;
+}, {
+  message: "senderId, senderType, content, and chatId are required",
+  path: ["senderId"],
+});
+
+// Chat creation with sender validation
+export const createChatSchema = insertChatSchema.extend({
+  // Will be validated to ensure both participants exist
+  customerId: z.string().min(1, "Customer ID is required"),
+  plumberId: z.string().min(1, "Plumber ID is required"),
+});
+
 // Types
 export type InsertPlumber = z.infer<typeof insertPlumberSchema>;
 export type Plumber = typeof plumbers.$inferSelect;
@@ -299,6 +390,10 @@ export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type InsertFile = z.infer<typeof insertFileSchema>;
 export type File = typeof files.$inferSelect;
+export type InsertChat = z.infer<typeof insertChatSchema>;
+export type Chat = typeof chats.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Message = typeof messages.$inferSelect;
 
 // User type is now Plumber
 export type User = typeof plumbers.$inferSelect;
