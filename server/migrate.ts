@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
  */
 export async function ensureDatabaseReady(): Promise<void> {
   try {
-    console.log('🔄 Ensuring database is ready...');
+    console.log('Ensuring database is ready...');
     
     // Ensure pgcrypto extension is available for gen_random_uuid()
     console.log('Creating required database extensions...');
@@ -36,11 +36,11 @@ export async function ensureDatabaseReady(): Promise<void> {
       }
     }
     
-    console.log('✅ Database is ready');
+    console.log('Database is ready');
   } catch (error: any) {
     // If migration fails due to existing tables, just verify the schema
     if (error.message?.includes('already exists')) {
-      console.log('⚠️  Migration skipped (tables already exist), verifying schema...');
+      console.log('Migration skipped (tables already exist), verifying schema...');
       try {
         const verifyResult = await db.execute(sql`SELECT to_regclass('public.plumbers') as plumbers_table;`);
         if (verifyResult.rows[0]?.plumbers_table) {
