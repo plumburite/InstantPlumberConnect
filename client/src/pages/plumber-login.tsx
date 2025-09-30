@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -62,14 +63,9 @@ export default function PlumberLogin() {
               <Wrench className="text-primary text-2xl" />
               <span className="text-xl font-bold text-primary">Instant Plumber Connect</span>
             </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/customer/login" className="text-muted-foreground hover:text-foreground transition-colors">
-                Customer Login
-              </Link>
-              <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
-                ← Back to Home
-              </Link>
-            </div>
+            <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+              ← Back to Home
+            </Link>
           </div>
         </div>
       </nav>
@@ -91,7 +87,7 @@ export default function PlumberLogin() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {step === 'phone' ? 'Login / Register' : 'Enter Verification Code'}
+                  {step === 'phone' ? 'Sign In / Register' : 'Enter Verification Code'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -106,7 +102,6 @@ export default function PlumberLogin() {
                           onChange={(e) => updateForm("firstName", e.target.value)}
                           placeholder="John"
                           required
-                          data-testid="input-first-name"
                         />
                       </div>
                       <div>
@@ -117,7 +112,6 @@ export default function PlumberLogin() {
                           onChange={(e) => updateForm("lastName", e.target.value)}
                           placeholder="Smith"
                           required
-                          data-testid="input-last-name"
                         />
                       </div>
                     </div>
@@ -130,7 +124,6 @@ export default function PlumberLogin() {
                         onChange={(e) => updateForm("company", e.target.value)}
                         placeholder="Smith Plumbing LLC"
                         required
-                        data-testid="input-company"
                       />
                     </div>
 
@@ -142,7 +135,6 @@ export default function PlumberLogin() {
                         onChange={(e) => updateForm("licenseNumber", e.target.value)}
                         placeholder="PL-12345"
                         required
-                        data-testid="input-license"
                       />
                     </div>
 
@@ -155,7 +147,6 @@ export default function PlumberLogin() {
                         onChange={(e) => updateForm("phoneNumber", e.target.value)}
                         placeholder="+1 (555) 123-4567"
                         required
-                        data-testid="input-phone-number"
                       />
                     </div>
 
@@ -165,7 +156,7 @@ export default function PlumberLogin() {
                         value={formData.serviceRadius}
                         onValueChange={(value) => updateForm("serviceRadius", value)}
                       >
-                        <SelectTrigger data-testid="select-radius">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -180,14 +171,9 @@ export default function PlumberLogin() {
                       type="submit" 
                       className="w-full" 
                       disabled={sendCodeMutation.isPending}
-                      data-testid="button-send-code"
                     >
                       {sendCodeMutation.isPending ? 'Sending Code...' : 'Send Verification Code'}
                     </Button>
-
-                    <p className="text-sm text-muted-foreground text-center">
-                      Existing plumbers: Just enter your phone number to login
-                    </p>
                   </form>
                 ) : (
                   <form onSubmit={handleVerifyCode} className="space-y-4">
@@ -200,9 +186,8 @@ export default function PlumberLogin() {
                         placeholder="123456"
                         maxLength={6}
                         required
-                        data-testid="input-verification-code"
                       />
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         Enter the 6-digit code sent to {formData.phoneNumber}
                       </p>
                     </div>
@@ -212,7 +197,6 @@ export default function PlumberLogin() {
                         variant="outline" 
                         onClick={() => setStep('phone')}
                         className="flex-1"
-                        data-testid="button-back"
                       >
                         Back
                       </Button>
@@ -220,9 +204,8 @@ export default function PlumberLogin() {
                         type="submit" 
                         className="flex-1"
                         disabled={verifyCodeMutation.isPending || formData.code.length !== 6}
-                        data-testid="button-verify-code"
                       >
-                        {verifyCodeMutation.isPending ? 'Verifying...' : 'Login to Dashboard'}
+                        {verifyCodeMutation.isPending ? 'Verifying...' : 'Login'}
                       </Button>
                     </div>
                   </form>
@@ -233,34 +216,34 @@ export default function PlumberLogin() {
         </div>
 
         {/* Right Column - Hero Section */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-background to-accent/10 items-center justify-center p-8">
+        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-green-50 to-blue-100 items-center justify-center p-8">
           <div className="max-w-md text-center space-y-6">
-            <div className="w-20 h-20 mx-auto bg-primary rounded-full flex items-center justify-center mb-6">
-              <Wrench className="w-10 h-10 text-primary-foreground" />
+            <div className="w-20 h-20 mx-auto bg-green-600 rounded-full flex items-center justify-center mb-6">
+              <Wrench className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-3xl font-bold">Professional Plumber Access</h2>
+            <h2 className="text-3xl font-bold">Join Our Plumber Network</h2>
             <p className="text-lg text-muted-foreground">
-              Access your dashboard, manage customer calls, and grow your plumbing business.
+              Connect with customers instantly through video calls. Complete business management tools included.
             </p>
             
             <div className="space-y-4">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-accent" />
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Shield className="w-4 h-4 text-green-600" />
                 </div>
                 <span className="text-sm">SMS verification for security</span>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                  <Star className="w-4 h-4 text-primary" />
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Star className="w-4 h-4 text-green-600" />
                 </div>
                 <span className="text-sm">Build your reputation with ratings</span>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
-                  <Users className="w-4 h-4 text-accent" />
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Users className="w-4 h-4 text-green-600" />
                 </div>
-                <span className="text-sm">Manage customers and calls</span>
+                <span className="text-sm">Complete CRM system included</span>
               </div>
             </div>
           </div>

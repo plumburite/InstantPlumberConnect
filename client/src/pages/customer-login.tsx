@@ -1,46 +1,68 @@
+
 import { useState, useEffect } from "react";
+import { useSocket } from "@/hooks/use-socket";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Phone, MessageSquare, Clock, MapPin } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Wrench, Phone, MapPin, Clock, AlertCircle, Video, CheckCircle } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useSocket } from "@/hooks/use-socket";
-import { useToast } from "@/hooks/use-toast";
+import VideoChat from "@/components/video-chat";
 
 export default function CustomerLogin() {
-  const { initiateCall, activeCalls, isConnected } = useSocket();
-  const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<'form' | 'waiting'>('form');
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const { socket, isConnected } = useSocket();
+  const [step, setStep] = useState<'form' | 'waiting' | 'connected' | 'failed'>('form');
+  const [showVideoChat, setShowVideoChat] = useState(false);
+  const [callData, setCallData] = useState<any>(null);
+  const [location, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
-    location: '',
-    issue: '',
-    code: ''
+    customerName: '',
+    customerPhone: '',
+    issueDescription: '',
   });
 
-  // Listen for call status changes
   useEffect(() => {
-    if (activeCalls.size > 0) {
-      const callEntries = Array.from(activeCalls.values());
-      const acceptedCall = callEntries.find(call => call.status === 'accepted');
-      
-      if (acceptedCall) {
-        toast({
-          title: "Plumber found!",
-          description: "Connecting you to video chat...",
-        });
-        // Redirect to video chat - you can create a video chat page or modal
-        setLocation('/video-chat');
-      }
-    }
-  }, [activeCalls, toast, setLocation]);
+    if (!socket || !isConnected) return;
 
-  const requestLocation = () => {
+    // Identify as customer
+    socket.emit('identify', { userType: 'customer', location });
+
+    // Listen for call events
+    socket.on('call_searching', (data) => {
+      setStep('waiting');
+      setCallData(data);
+    });
+
+    socket.on('call_accepted', (data) => {
+      setStep('connected');
+      setCallData(data);
+      setShowVideoChat(true);
+    });
+
+    socket.on('call_failed', (data) => {
+      setStep('failed');
+      console.log('Call failed:', data.reason);
+    });
+
+    socket.on('call_timeout', (data) => {
+      setStep('failed');
+      console.log('Call timeout:', data.reason);
+    });
+
+    return () => {
+      socket.off('call_searching');
+      socket.off('call_accepted');
+      socket.off('call_failed');
+      socket.off('call_timeout');
+    };
+  }, [socket, isConnected, location]);
+
+  useEffect(() => {
+    // Request location on component mount
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -48,67 +70,58 @@ export default function CustomerLogin() {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
-          toast({
-            title: "Location granted",
-            description: "We can now find plumbers near you!",
-          });
         },
         (error) => {
-          toast({
-            title: "Location required",
-            description: "Location access is needed to find nearby plumbers.",
-            variant: "destructive",
-          });
+          console.error('Error getting location:', error);
+          // Use default location if permission denied
+          setUserLocation({ lat: 40.7128, lng: -74.0060 }); // NYC default
         }
       );
     }
-  };
+  }, []);
 
-  const handleRequestCall = (e: React.FormEvent) => {
+  const handleCallRequest = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!userLocation) {
-      toast({
-        title: "Location required",
-        description: "Please share your location to find nearby plumbers.",
-        variant: "destructive",
-      });
-      requestLocation();
+    if (!location) {
+      alert('Location is required to find nearby plumbers');
       return;
     }
 
-    if (!isConnected) {
-      toast({
-        title: "Connection error",
-        description: "Unable to connect to the service. Please try again.",
-        variant: "destructive",
-      });
+    if (!socket || !isConnected) {
+      alert('Connection error. Please refresh the page.');
       return;
     }
 
-    // Initiate the call through Socket.IO
-    initiateCall({
-      customerName: `${formData.firstName} ${formData.lastName}`,
-      customerPhone: formData.phoneNumber,
-      issueDescription: formData.issue,
-      location: userLocation,
-    });
-
-    setStep('waiting');
-    toast({
-      title: "Searching for plumbers",
-      description: "Looking for available plumbers in your area...",
+    socket.emit('initiate_call', {
+      customerName: formData.customerName,
+      customerPhone: formData.customerPhone,
+      issueDescription: formData.issueDescription,
+      location,
     });
   };
 
-  const handleVerifyCall = (e: React.FormEvent) => {
-    e.preventDefault();
-    // No longer needed - automatically handled by socket events
+  const handleBackToForm = () => {
+    setStep('form');
+    setCallData(null);
+    setShowVideoChat(false);
   };
 
-  const updateForm = (field: keyof typeof formData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  if (showVideoChat && callData) {
+    return (
+      <VideoChat
+        isCustomer={true}
+        customerSocketId={callData.customerSocketId}
+        plumberSocketId={callData.plumberSocketId}
+        callId={callData.callId}
+        onCallEnd={() => {
+          setShowVideoChat(false);
+          setStep('form');
+          setCallData(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,17 +130,12 @@ export default function CustomerLogin() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center space-x-3">
-              <Phone className="text-primary text-2xl" />
+              <Wrench className="text-primary text-2xl" />
               <span className="text-xl font-bold text-primary">Instant Plumber Connect</span>
             </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/plumber/login" className="text-muted-foreground hover:text-foreground transition-colors">
-                Plumber Login
-              </Link>
-              <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
-                ← Back to Home
-              </Link>
-            </div>
+            <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+              ← Back to Home
+            </Link>
           </div>
         </div>
       </nav>
@@ -141,124 +149,136 @@ export default function CustomerLogin() {
               <p className="text-muted-foreground mt-2">
                 {step === 'form' 
                   ? 'Connect with a local plumber via video call' 
-                  : 'Searching for available plumbers in your area...'
+                  : step === 'waiting'
+                  ? 'Searching for available plumbers in your area...'
+                  : step === 'connected'
+                  ? 'Connected! Your plumber is ready to help.'
+                  : 'No plumbers available right now. Please try again.'
                 }
               </p>
             </div>
 
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {step === 'form' ? 'Request Video Call' : 'Finding Available Plumbers'}
+                <CardTitle className="flex items-center space-x-2">
+                  {step === 'form' && <Phone className="w-5 h-5" />}
+                  {step === 'waiting' && <Clock className="w-5 h-5 animate-spin" />}
+                  {step === 'connected' && <CheckCircle className="w-5 h-5 text-green-500" />}
+                  {step === 'failed' && <AlertCircle className="w-5 h-5 text-red-500" />}
+                  <span>
+                    {step === 'form' && 'Request Help'}
+                    {step === 'waiting' && 'Finding Plumber...'}
+                    {step === 'connected' && 'Connected'}
+                    {step === 'failed' && 'No Response'}
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {step === 'form' ? (
-                  <form onSubmit={handleRequestCall} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input
-                          id="firstName"
-                          value={formData.firstName}
-                          onChange={(e) => updateForm("firstName", e.target.value)}
-                          placeholder="John"
-                          required
-                          data-testid="input-first-name"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input
-                          id="lastName"
-                          value={formData.lastName}
-                          onChange={(e) => updateForm("lastName", e.target.value)}
-                          placeholder="Doe"
-                          required
-                          data-testid="input-last-name"
-                        />
-                      </div>
+                {step === 'form' && (
+                  <form onSubmit={handleCallRequest} className="space-y-4">
+                    <div>
+                      <Label htmlFor="customerName">Your Name</Label>
+                      <Input
+                        id="customerName"
+                        value={formData.customerName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                        placeholder="John Smith"
+                        required
+                      />
                     </div>
 
                     <div>
-                      <Label htmlFor="phone">Phone Number</Label>
+                      <Label htmlFor="customerPhone">Phone Number</Label>
                       <Input
-                        id="phone"
+                        id="customerPhone"
                         type="tel"
-                        value={formData.phoneNumber}
-                        onChange={(e) => updateForm("phoneNumber", e.target.value)}
+                        value={formData.customerPhone}
+                        onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
                         placeholder="+1 (555) 123-4567"
                         required
-                        data-testid="input-phone-number"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="location">Your Location</Label>
-                      <Input
-                        id="location"
-                        value={formData.location}
-                        onChange={(e) => updateForm("location", e.target.value)}
-                        placeholder="123 Main St, City, State"
+                      <Label htmlFor="issueDescription">Describe Your Issue</Label>
+                      <Textarea
+                        id="issueDescription"
+                        value={formData.issueDescription}
+                        onChange={(e) => setFormData(prev => ({ ...prev, issueDescription: e.target.value }))}
+                        placeholder="Leaking pipe under kitchen sink..."
                         required
-                        data-testid="input-location"
+                        rows={3}
                       />
                     </div>
 
-                    <div>
-                      <Label htmlFor="issue">Describe the Issue</Label>
-                      <textarea
-                        id="issue"
-                        className="w-full min-h-[100px] px-3 py-2 border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
-                        value={formData.issue}
-                        onChange={(e) => updateForm("issue", e.target.value)}
-                        placeholder="Leaky faucet in kitchen sink, dripping constantly..."
-                        required
-                        data-testid="textarea-issue"
-                      />
+                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      <span>
+                        {location ? 'Location detected' : 'Detecting location...'}
+                      </span>
                     </div>
 
                     <Button 
                       type="submit" 
                       className="w-full" 
-                      data-testid="button-request-call"
+                      disabled={!location || !isConnected}
                     >
-                      Connect Me with a Plumber
+                      <Video className="w-4 h-4 mr-2" />
+                      Connect with Plumber
                     </Button>
-
+                    
                     <p className="text-sm text-muted-foreground text-center">
                       No registration required • Get help in minutes
                     </p>
                   </form>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                      <h3 className="font-semibold mb-2">Finding Available Plumbers...</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Searching for qualified plumbers in your area. You'll be connected automatically when one becomes available.
-                      </p>
-                    </div>
+                )}
 
-                    <div className="border rounded-lg p-4 bg-muted/50">
-                      <h4 className="font-medium mb-2">Your Request:</h4>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
-                        <p><strong>Phone:</strong> {formData.phoneNumber}</p>
-                        <p><strong>Location:</strong> {formData.location}</p>
-                        <p><strong>Issue:</strong> {formData.issue}</p>
+                {step === 'waiting' && (
+                  <div className="text-center space-y-4">
+                    <div className="animate-pulse">
+                      <div className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center mb-4">
+                        <Clock className="w-8 h-8 text-primary animate-spin" />
                       </div>
                     </div>
-
-                    <Button 
-                      type="button" 
-                      variant="outline"
-                      onClick={() => setStep('form')}
-                      className="w-full"
-                      data-testid="button-back"
-                    >
-                      Back to Edit Request
+                    <p className="text-muted-foreground">
+                      Connecting you with nearby plumbers...
+                    </p>
+                    <Badge variant="outline">Expected wait: 30 seconds</Badge>
+                    <Button variant="outline" onClick={handleBackToForm} className="w-full">
+                      Cancel Request
                     </Button>
+                  </div>
+                )}
+
+                {step === 'connected' && callData && (
+                  <div className="text-center space-y-4">
+                    <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
+                      <CheckCircle className="w-8 h-8 text-green-500" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Connected to {callData.plumber?.firstName}</h3>
+                      <p className="text-muted-foreground">{callData.plumber?.company}</p>
+                    </div>
+                    <Badge variant="default">Video call starting...</Badge>
+                  </div>
+                )}
+
+                {step === 'failed' && (
+                  <div className="text-center space-y-4">
+                    <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
+                      <AlertCircle className="w-8 h-8 text-red-500" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      No plumbers are available in your area right now.
+                    </p>
+                    <div className="space-y-2">
+                      <Button onClick={handleBackToForm} className="w-full">
+                        Try Again
+                      </Button>
+                      <Button variant="outline" asChild className="w-full">
+                        <Link href="/">Back to Home</Link>
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -266,15 +286,15 @@ export default function CustomerLogin() {
           </div>
         </div>
 
-        {/* Right Column - Customer Benefits */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-50 to-green-50 items-center justify-center p-8">
+        {/* Right Column - Hero Section */}
+        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-50 to-indigo-100 items-center justify-center p-8">
           <div className="max-w-md text-center space-y-6">
             <div className="w-20 h-20 mx-auto bg-blue-600 rounded-full flex items-center justify-center mb-6">
               <Phone className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-3xl font-bold">Instant Plumber Access</h2>
+            <h2 className="text-3xl font-bold">Emergency Plumber Access</h2>
             <p className="text-lg text-muted-foreground">
-              Get connected with licensed, local plumbers through video calls. No waiting, no hassle.
+              Get instant help from licensed plumbers through secure video calls. Available 24/7 for emergencies.
             </p>
             
             <div className="space-y-4">
@@ -282,19 +302,19 @@ export default function CustomerLogin() {
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                   <Clock className="w-4 h-4 text-blue-600" />
                 </div>
-                <span className="text-sm">Available 24/7 for emergencies</span>
+                <span className="text-sm">Connect in under 60 seconds</span>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-green-600" />
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <MapPin className="w-4 h-4 text-blue-600" />
                 </div>
                 <span className="text-sm">Local plumbers in your area</span>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4 text-purple-600" />
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Video className="w-4 h-4 text-blue-600" />
                 </div>
-                <span className="text-sm">Video chat for better diagnosis</span>
+                <span className="text-sm">Secure video consultation</span>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Wrench, LogOut, MessageSquare } from "lucide-react";
+import { Wrench, LogOut, MessageSquare, BarChart3, ExternalLink } from "lucide-react";
 
 export default function NavigationHeader() {
   const [location] = useLocation();
@@ -18,6 +19,9 @@ export default function NavigationHeader() {
   const handleLogout = () => {
     logoutMutation.mutate();
   };
+
+  // Determine if user is plumber or customer
+  const isPlumber = user && user.company;
 
   return (
     <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
@@ -34,9 +38,19 @@ export default function NavigationHeader() {
                 <Link href="/dashboard" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/dashboard' ? 'text-foreground font-medium' : ''}`}>
                   Dashboard
                 </Link>
-                <Link href="/crm" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/crm' ? 'text-foreground font-medium' : ''}`}>
-                  CRM
-                </Link>
+                
+                {isPlumber && (
+                  <>
+                    <Link href="/crm" className={`text-muted-foreground hover:text-foreground transition-colors ${location === '/crm' ? 'text-foreground font-medium' : ''}`}>
+                      CRM
+                    </Link>
+                    <Link href="/analytics" className={`flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors ${location === '/analytics' ? 'text-foreground font-medium' : ''}`}>
+                      <BarChart3 className="w-4 h-4" />
+                      <span>Analytics</span>
+                    </Link>
+                  </>
+                )}
+                
                 <Link href="/chats" className={`flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors ${location?.startsWith('/chats') ? 'text-foreground font-medium' : ''}`} data-testid="nav-messages">
                   <MessageSquare className="w-4 h-4" />
                   <span>Messages</span>
@@ -46,6 +60,16 @@ export default function NavigationHeader() {
                     </Badge>
                   )}
                 </Link>
+                
+                {!isPlumber && (
+                  <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700">
+                    <Link href="/customer/login">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Get Help
+                    </Link>
+                  </Button>
+                )}
+                
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -62,11 +86,10 @@ export default function NavigationHeader() {
                 <Link href="/auth" className="text-muted-foreground hover:text-foreground transition-colors">
                   For Plumbers
                 </Link>
-                <Button 
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  data-testid="button-emergency"
-                >
-                  Emergency Help
+                <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="button-emergency">
+                  <Link href="/customer/login">
+                    Emergency Help
+                  </Link>
                 </Button>
               </>
             )}

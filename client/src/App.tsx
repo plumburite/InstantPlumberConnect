@@ -1,3 +1,4 @@
+
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ import NotFound from "@/pages/not-found";
 import ChatInbox from "@/pages/chat-inbox";
 import ChatThread from "@/pages/chat-thread";
 import CustomerDashboard from "@/pages/customer-dashboard";
+import AnalyticsDashboard from "@/components/analytics-dashboard";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -38,6 +40,7 @@ function Router() {
           {/* Plumber-specific routes */}
           <ProtectedRoute path="/dashboard" component={() => <PlumberDashboard />} />
           <ProtectedRoute path="/crm" component={() => <CrmDashboard />} />
+          <ProtectedRoute path="/analytics" component={() => <AnalyticsDashboard />} />
           <ProtectedRoute path="/chats" component={() => <ChatInbox />} />
           <ProtectedRoute path="/chats/:id" component={() => <ChatThread />} />
           
