@@ -14,9 +14,8 @@ export function initializeFirebaseAdmin() {
       : null;
 
     if (!serviceAccount) {
-      // Only log warning in production - Firebase is optional for development
       if (process.env.NODE_ENV === 'production') {
-        console.log('Warning: Firebase Admin SDK not initialized - missing service account key');
+        console.warn('Firebase Admin SDK not initialized - missing service account key');
       }
       return null;
     }
@@ -53,7 +52,9 @@ export class FCMService {
 
   async sendNotificationToUser(userId: string, payload: NotificationPayload): Promise<boolean> {
     if (!this.messaging) {
-      console.log('Warning: FCM not available - Firebase Admin not initialized');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('FCM not available - Firebase Admin not initialized');
+      }
       return false;
     }
 
@@ -75,7 +76,9 @@ export class FCMService {
       }
 
       if (!fcmToken) {
-        console.log(`No FCM token found for user ${userId}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`No FCM token found for user ${userId}`);
+        }
         return false;
       }
 
@@ -117,7 +120,9 @@ export class FCMService {
 
       // Send the message
       const response = await this.messaging.send(message);
-      console.log(`Notification sent successfully to ${userId}:`, response);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Notification sent successfully to ${userId}:`, response);
+      }
       return true;
 
     } catch (error: any) {
@@ -159,7 +164,9 @@ export class FCMService {
       const availablePlumbers = await storage.getAvailablePlumbers();
       
       if (availablePlumbers.length === 0) {
-        console.log('No available plumbers to notify');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('No available plumbers to notify');
+        }
         return;
       }
 
@@ -191,8 +198,9 @@ export class FCMService {
     company: string;
   }): Promise<void> {
     // Note: This would require storing customer FCM tokens as well
-    // For now, we'll just log it
-    console.log(`Would notify customer ${customerId} that plumber ${plumberData.firstName} ${plumberData.lastName} accepted the call`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`Would notify customer ${customerId} that plumber ${plumberData.firstName} ${plumberData.lastName} accepted the call`);
+    }
   }
 
   async notifyParticipantsOfEndedCall(participantIds: string[], callData: {

@@ -44,15 +44,15 @@ export async function ensureDatabaseReady(): Promise<void> {
       try {
         const verifyResult = await db.execute(sql`SELECT to_regclass('public.plumbers') as plumbers_table;`);
         if (verifyResult.rows[0]?.plumbers_table) {
-          console.log('✅ Database schema verified');
+          console.log('Database schema verified');
           return;
         }
       } catch (verifyError) {
-        console.error('❌ Schema verification failed:', verifyError);
+        console.error('Schema verification failed:', verifyError);
       }
     }
     
-    console.error('❌ Database initialization failed:', error.message);
+    console.error('Database initialization failed:', error.message);
     throw error;
   }
 }
