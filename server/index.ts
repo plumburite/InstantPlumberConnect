@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { ensureDatabaseReady } from "./migrate";
+import { generateServiceWorker } from "./generate-sw";
 
 const app = express();
 app.use(express.json());
@@ -27,6 +28,13 @@ app.use((req, res, next) => {
   } catch (error) {
     console.error('Failed to initialize database on startup:', error);
     process.exit(1);
+  }
+
+  // Generate Firebase service worker with environment variables
+  try {
+    generateServiceWorker();
+  } catch (error) {
+    console.error('Failed to generate Firebase service worker:', error);
   }
 
   const server = await registerRoutes(app);
