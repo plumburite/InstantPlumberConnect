@@ -13,6 +13,7 @@ import { twilioService } from "./twilio-service";
 import { emailService } from "./email-service";
 import { db } from "./db";
 import { eq, lt } from "drizzle-orm";
+import { getFirebaseEnvForClient } from "./firebase-env";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Clean up expired auth codes and sessions on startup
@@ -401,6 +402,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   };
+
+  // Firebase configuration endpoint for client
+  app.get("/api/firebase/config", (req, res) => {
+    const config = getFirebaseEnvForClient();
+    res.json(config);
+  });
 
   // Create HTTP server first
   const httpServer = createServer(app);

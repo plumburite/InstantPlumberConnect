@@ -1,26 +1,101 @@
-// Firebase disabled for deployment - will be re-enabled later
-// import { initializeApp } from 'firebase/app';
-// import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { useToast } from '@/hooks/use-toast';
+import { initializeApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
-// Firebase temporarily disabled for core app deployment
-// Push notifications will be added in a future enhancement
-console.log('Firebase/FCM temporarily disabled - core app functionality available');
+let firebaseConfig: any = null;
+let configLoaded = false;
 
-// Stub Firebase app object
-export const firebaseApp = null;
+const loadFirebaseConfig = async () => {
+  if (configLoaded) return firebaseConfig;
+  
+  try {
+    const response = await fetch('/api/firebase/config');
+    firebaseConfig = await response.json();
+    configLoaded = true;
+    return firebaseConfig;
+  } catch (error) {
+    console.error('Failed to load Firebase config:', error);
+    return null;
+  }
+};
 
-// Messaging stub
+let firebaseAppInstance: any = null;
+
+const getFirebaseApp = async () => {
+  if (firebaseAppInstance) return firebaseAppInstance;
+  
+  const config = await loadFirebaseConfig();
+  if (!config || !config.VITE_FIREBASE_API_KEY) {
+    console.warn('Firebase config not available');
+    return null;
+  }
+  
+  firebaseAppInstance = initializeApp({
+    apiKey: config.VITE_FIREBASE_API_KEY,
+    authDomain: config.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: config.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: config.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: config.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: config.VITE_FIREBASE_APP_ID,
+  });
+  
+  return firebaseAppInstance;
+};
+
+export const firebaseApp = firebaseAppInstance;
+
 let messaging: any = null;
 
+const initializeMessaging = async () => {
+  if (messaging) return messaging;
+  
+  const app = await getFirebaseApp();
+  if (!app) return null;
+  
+  const supported = await isSupported();
+  if (supported) {
+    messaging = getMessaging(app);
+  } else {
+    console.warn('Firebase Messaging is not supported in this browser');
+  }
+  return messaging;
+};
+
 export const requestNotificationPermission = async (): Promise<string | null> => {
-  console.log('Push notifications temporarily disabled - feature will be available in future update');
-  return null;
+  try {
+    const msg = await initializeMessaging();
+    if (!msg) return null;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('Notification permission denied');
+      return null;
+    }
+
+    const config = await loadFirebaseConfig();
+    const vapidKey = config?.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) {
+      console.error('VAPID key not configured');
+      return null;
+    }
+
+    const token = await getToken(msg, { vapidKey });
+    console.log('FCM token obtained:', token);
+    return token;
+  } catch (error) {
+    console.error('Error getting notification permission:', error);
+    return null;
+  }
 };
 
 export const setupForegroundMessageHandler = () => {
-  console.log('Firebase messaging temporarily disabled');
-  return;
+  initializeMessaging().then(msg => {
+    if (!msg) return;
+    
+    onMessage(msg, (payload) => {
+      console.log('Foreground message received:', payload);
+      handleNotificationData(payload.data);
+    });
+  });
 };
 
 const handleNotificationData = (data: any) => {
