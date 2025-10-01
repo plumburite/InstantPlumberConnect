@@ -2,16 +2,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export function generateServiceWorker() {
+  const cleanValue = (val: string | undefined) => {
+    if (!val) return '';
+    let cleaned = val.trim();
+    while (cleaned.startsWith('"') || cleaned.startsWith("'") || cleaned.startsWith(',') || cleaned.startsWith(' ')) {
+      cleaned = cleaned.slice(1).trim();
+    }
+    while (cleaned.endsWith('"') || cleaned.endsWith("'") || cleaned.endsWith(',') || cleaned.endsWith(' ')) {
+      cleaned = cleaned.slice(0, -1).trim();
+    }
+    return cleaned;
+  };
+  
+  const apiKey = cleanValue(process.env.FIREBASE_API_KEY);
+  const authDomain = cleanValue(process.env.FIREBASE_AUTH_DOMAIN);
+  const projectId = cleanValue(process.env.FIREBASE_PROJECT_ID);
+  const storageBucket = cleanValue(process.env.FIREBASE_STORAGE_BUCKET);
+  const messagingSenderId = cleanValue(process.env.FIREBASE_MESSAGING_SENDER_ID);
+  const appId = cleanValue(process.env.FIREBASE_APP_ID);
+  
   const template = `importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 const firebaseConfig = {
-  apiKey: "${process.env.FIREBASE_API_KEY || ''}",
-  authDomain: "${process.env.FIREBASE_AUTH_DOMAIN || ''}",
-  projectId: "${process.env.FIREBASE_PROJECT_ID || ''}",
-  storageBucket: "${process.env.FIREBASE_STORAGE_BUCKET || ''}",
-  messagingSenderId: "${process.env.FIREBASE_MESSAGING_SENDER_ID || ''}",
-  appId: "${process.env.FIREBASE_APP_ID || ''}"
+  apiKey: "${apiKey}",
+  authDomain: "${authDomain}",
+  projectId: "${projectId}",
+  storageBucket: "${storageBucket}",
+  messagingSenderId: "${messagingSenderId}",
+  appId: "${appId}"
 };
 
 firebase.initializeApp(firebaseConfig);

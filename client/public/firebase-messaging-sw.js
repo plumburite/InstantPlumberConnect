@@ -2,12 +2,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 const firebaseConfig = {
-  apiKey: "FIREBASE_API_KEY_PLACEHOLDER",
-  authDomain: "FIREBASE_AUTH_DOMAIN_PLACEHOLDER",
-  projectId: "FIREBASE_PROJECT_ID_PLACEHOLDER",
-  storageBucket: "FIREBASE_STORAGE_BUCKET_PLACEHOLDER",
-  messagingSenderId: "FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER",
-  appId: "FIREBASE_APP_ID_PLACEHOLDER"
+  apiKey: "AIzaSyCN2W-KtQ5xhNlvYQSyIm11QfNvuNJliPA",
+  authDomain: "instantplumberconnect.firebaseapp.com",
+  projectId: "instantplumberconnect",
+  storageBucket: "instantplumberconnect.firebasestorage.app",
+  messagingSenderId: "948897330821",
+  appId: "1:948897330821:web:b7614ef398c350e015dbec"
 };
 
 firebase.initializeApp(firebaseConfig);
