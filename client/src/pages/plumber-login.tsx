@@ -13,9 +13,11 @@ import { Link } from "wouter";
 export default function PlumberLogin() {
   const { sendCodeMutation, verifyCodeMutation, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [step, setStep] = useState<'contact' | 'code'>('contact');
   const [formData, setFormData] = useState({
+    contactMethod: 'phone' as 'phone' | 'email',
     phoneNumber: '',
+    email: '',
     firstName: '',
     lastName: '',
     company: '',
@@ -32,21 +34,33 @@ export default function PlumberLogin() {
 
   const handleSendCode = (e: React.FormEvent) => {
     e.preventDefault();
-    sendCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
+    const data: any = {
       firstName: formData.firstName,
       lastName: formData.lastName
-    }, {
+    };
+    
+    if (formData.contactMethod === 'email') {
+      data.email = formData.email;
+    } else {
+      data.phoneNumber = formData.phoneNumber;
+    }
+    
+    sendCodeMutation.mutate(data, {
       onSuccess: () => setStep('code')
     });
   };
 
   const handleVerifyCode = (e: React.FormEvent) => {
     e.preventDefault();
-    verifyCodeMutation.mutate({
-      phoneNumber: formData.phoneNumber,
-      code: formData.code
-    });
+    const data: any = { code: formData.code };
+    
+    if (formData.contactMethod === 'email') {
+      data.email = formData.email;
+    } else {
+      data.phoneNumber = formData.phoneNumber;
+    }
+    
+    verifyCodeMutation.mutate(data);
   };
 
   const updateForm = (field: keyof typeof formData, value: string) => {
@@ -77,9 +91,9 @@ export default function PlumberLogin() {
             <div className="text-center">
               <h1 className="text-3xl font-bold">Plumber Login</h1>
               <p className="text-muted-foreground mt-2">
-                {step === 'phone' 
+                {step === 'contact' 
                   ? 'Access your plumber dashboard' 
-                  : 'Verify your phone number to login'
+                  : `Verify your ${formData.contactMethod} to login`
                 }
               </p>
             </div>
@@ -87,11 +101,11 @@ export default function PlumberLogin() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {step === 'phone' ? 'Sign In / Register' : 'Enter Verification Code'}
+                  {step === 'contact' ? 'Sign In / Register' : 'Enter Verification Code'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {step === 'phone' ? (
+                {step === 'contact' ? (
                   <form onSubmit={handleSendCode} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -139,15 +153,47 @@ export default function PlumberLogin() {
                     </div>
 
                     <div>
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={formData.phoneNumber}
-                        onChange={(e) => updateForm("phoneNumber", e.target.value)}
-                        placeholder="+1 (555) 123-4567"
-                        required
-                      />
+                      <Label htmlFor="contact-method">Preferred Contact Method</Label>
+                      <Select 
+                        value={formData.contactMethod}
+                        onValueChange={(value: 'phone' | 'email') => updateForm("contactMethod", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="phone">Phone Number (SMS)</SelectItem>
+                          <SelectItem value="email">Email Address</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      {formData.contactMethod === 'email' ? (
+                        <>
+                          <Label htmlFor="email">Email Address</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => updateForm("email", e.target.value)}
+                            placeholder="john@example.com"
+                            required
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            value={formData.phoneNumber}
+                            onChange={(e) => updateForm("phoneNumber", e.target.value)}
+                            placeholder="+1 (555) 123-4567"
+                            required
+                          />
+                        </>
+                      )}
                     </div>
 
                     <div>
@@ -188,14 +234,14 @@ export default function PlumberLogin() {
                         required
                       />
                       <p className="text-sm text-muted-foreground mt-1">
-                        Enter the 6-digit code sent to {formData.phoneNumber}
+                        Enter the 6-digit code sent to {formData.contactMethod === 'email' ? formData.email : formData.phoneNumber}
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button 
                         type="button" 
                         variant="outline" 
-                        onClick={() => setStep('phone')}
+                        onClick={() => setStep('contact')}
                         className="flex-1"
                       >
                         Back
@@ -231,7 +277,7 @@ export default function PlumberLogin() {
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                   <Shield className="w-4 h-4 text-green-600" />
                 </div>
-                <span className="text-sm">SMS verification for security</span>
+                <span className="text-sm">SMS or Email verification for security</span>
               </div>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">

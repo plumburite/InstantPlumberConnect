@@ -10,14 +10,21 @@ class EmailService {
 
   private initialize() {
     try {
-      if (!process.env.SENDGRID_API_KEY) {
+      const apiKey = process.env.SENDGRID_API_KEY;
+      
+      if (!apiKey) {
         console.log('SendGrid API key not found - email verification disabled');
+        console.log('Set SENDGRID_API_KEY environment variable to enable email verification');
         return;
       }
 
-      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      if (!apiKey.startsWith('SG.')) {
+        console.warn('Warning: SendGrid API key format appears invalid (should start with "SG.")');
+      }
+
+      sgMail.setApiKey(apiKey);
       this.initialized = true;
-      console.log('SendGrid email service initialized');
+      console.log('✓ SendGrid email service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize SendGrid:', error);
     }
