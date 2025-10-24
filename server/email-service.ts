@@ -1,120 +1,127 @@
-// SendGrid email service integration
-import sgMail from '@sendgrid/mail';
+import nodemailer from "nodemailer";
 
-class EmailService {
-  private initialized = false;
+type SendResult = { success: boolean; info?: any };
 
-  constructor() {
-    this.initialize();
-  }
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_SECURE = process.env.SMTP_SECURE === "true";
 
-  private initialize() {
-    try {
-      const apiKey = process.env.SENDGRID_API_KEY;
-      
-      if (!apiKey) {
-        console.log('SendGrid API key not found - email verification disabled');
-        console.log('Set SENDGRID_API_KEY environment variable to enable email verification');
-        return;
-      }
+let transporter: nodemailer.Transporter | null = null;
 
-      if (!apiKey.startsWith('SG.')) {
-        console.warn('Warning: SendGrid API key format appears invalid (should start with "SG.")');
-      }
-
-      sgMail.setApiKey(apiKey);
-      this.initialized = true;
-      console.log('✓ SendGrid email service initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize SendGrid:', error);
-    }
-  }
-
-  isReady(): boolean {
-    return this.initialized;
-  }
-
-  async sendVerificationEmail(email: string, code: string, firstName?: string): Promise<boolean> {
-    if (!this.initialized) {
-      console.log('Email service not initialized - cannot send verification email');
-      return false;
-    }
-
-    try {
-      const msg = {
-        to: email,
-        from: 'noreply@instantplumberconnect.com', // Replace with your verified sender
-        subject: 'Your Instant Plumber Connect Verification Code',
-        text: `Your verification code is: ${code}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Instant Plumber Connect</h2>
-            <p>Hello ${firstName || 'there'},</p>
-            <p>Your verification code is:</p>
-            <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 20px 0;">
-              <h1 style="color: #1f2937; font-size: 32px; margin: 0; letter-spacing: 4px;">${code}</h1>
-            </div>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't request this verification, please ignore this email.</p>
-            <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-            <p style="color: #6b7280; font-size: 14px;">
-              Instant Plumber Connect - Professional plumbing services made simple
-            </p>
-          </div>
-        `,
-      };
-
-      await sgMail.send(msg);
-      console.log(`Verification email sent successfully to ${email}`);
-      return true;
-    } catch (error: any) {
-      console.error('SendGrid email error:', error);
-      
-      // Handle specific SendGrid errors
-      if (error.response) {
-        console.error('SendGrid response error:', {
-          status: error.response.status,
-          body: error.response.body
-        });
-      }
-      
-      return false;
-    }
-  }
-
-  async sendWelcomeEmail(email: string, firstName: string): Promise<boolean> {
-    if (!this.initialized) {
-      return false;
-    }
-
-    try {
-      const msg = {
-        to: email,
-        from: 'noreply@instantplumberconnect.com',
-        subject: 'Welcome to Instant Plumber Connect!',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Welcome to Instant Plumber Connect!</h2>
-            <p>Hello ${firstName},</p>
-            <p>Your plumber account has been successfully created. You can now:</p>
-            <ul>
-              <li>Receive instant video call requests from customers</li>
-              <li>Manage your availability status</li>
-              <li>Track your earnings and call history</li>
-            </ul>
-            <p>Start receiving calls by setting yourself as available in your dashboard!</p>
-          </div>
-        `,
-      };
-
-      await sgMail.send(msg);
-      console.log(`Welcome email sent to ${email}`);
-      return true;
-    } catch (error) {
-      console.error('Error sending welcome email:', error);
-      return false;
-    }
-  }
+if (SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS) {
+  transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE || SMTP_PORT === 465,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
 }
 
-export const emailService = new EmailService();
+function verificationEmailHtml(code: string, firstName?: string) {
+  const name = firstName ? `Hi ${firstName},` : "Hello,";
+  return `
+    <div style="font-family: Arial, sans-serif; color: #111;">
+      <p>${name}</p>
+      <p>Your verification code for Instant Plumber Connect is:</p>
+      <h2 style="letter-spacing: 4px;">${code}</h2>
+      <p>This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
+      <hr />
+      <p style="font-size: 12px; color: #666;">If you have trouble signing in, contact support.</p>
+    </div>
+  `;
+}
+
+function welcomeEmailHtml(firstName?: string) {
+  const name = firstName ? `Hi ${firstName},` : "Welcome,";
+  return `
+    <div style="font-family: Arial, sans-serif; color: #111;">
+      <p>${name}</p>
+      <p>Welcome to Instant Plumber Connect — glad to have you on board.</p>
+      <p>Start by updating your profile and verifying your contact details.</p>
+      <hr />
+      <p style="font-size: 12px; color: #666;">Thank you,<br/>The Instant Plumber Connect Team</p>
+    </div>
+  `;
+}
+
+export const emailService = {
+  isReady() {
+    return transporter !== null || process.env.NODE_ENV === "development";
+  },
+
+  async sendVerificationEmail(to: string, code: string, firstName?: string): Promise<boolean> {
+    try {
+      const subject = "Your Instant Plumber Connect verification code";
+      const html = verificationEmailHtml(code, firstName);
+      if (transporter) {
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"Instant Plumber Connect" <no-reply@plumberconnect.local>`,
+          to,
+          subject,
+          html,
+          text: `Your verification code is ${code}`,
+        });
+        console.log("Verification email sent:", info.messageId);
+        return true;
+      } else {
+        // Development fallback: log code so you can test without SMTP configured
+        console.log(`[DEV EMAIL] To: ${to} Subject: ${subject} Code: ${code}`);
+        return true;
+      }
+    } catch (err) {
+      console.error("Error sending verification email:", err);
+      return false;
+    }
+  },
+
+  async sendWelcomeEmail(to: string, firstName?: string): Promise<boolean> {
+    try {
+      const subject = "Welcome to Instant Plumber Connect";
+      const html = welcomeEmailHtml(firstName);
+      if (transporter) {
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"Instant Plumber Connect" <no-reply@plumberconnect.local>`,
+          to,
+          subject,
+          html,
+          text: `Welcome to Instant Plumber Connect.`,
+        });
+        console.log("Welcome email sent:", info.messageId);
+        return true;
+      } else {
+        console.log(`[DEV EMAIL] To: ${to} Subject: ${subject}`);
+        return true;
+      }
+    } catch (err) {
+      console.error("Error sending welcome email:", err);
+      return false;
+    }
+  },
+
+  async sendGenericEmail(to: string, subject: string, html: string): Promise<SendResult> {
+    try {
+      if (transporter) {
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"Instant Plumber Connect" <no-reply@plumberconnect.local>`,
+          to,
+          subject,
+          html,
+        });
+        return { success: true, info };
+      } else {
+        console.log(`[DEV EMAIL] To: ${to} Subject: ${subject} HTML: ${html}`);
+        return { success: true, info: "dev-fallback" };
+      }
+    } catch (err) {
+      console.error("Error sending email:", err);
+      return { success: false, info: err };
+    }
+  },
+};
+
+export default emailService;
